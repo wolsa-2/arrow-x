@@ -1,0 +1,70 @@
+name: Build ARROW X Android Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - apk-preview
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "vite.config.ts"
+      - "capacitor.config.json"
+      - ".github/workflows/android-debug-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout preview branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Install Capacitor Android tooling
+        run: npm install --no-save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
+
+      - name: Build web game
+        run: npm run build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync web assets to Android
+        run: npx cap sync android
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build installable Debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARROW-X-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
