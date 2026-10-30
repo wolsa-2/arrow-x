@@ -1,0 +1,162 @@
+import { Arrow, Direction, Obstacle } from './types';
+
+export interface BlockerInfo {
+  x: number;
+  y: number;
+  id: string;
+  type: 'arrow' | 'obstacle';
+}
+
+export interface EscapeCheckResult {
+  canEscape: boolean;
+  blocker?: BlockerInfo;
+  escapeTrajectory: Array<{ x: number; y: number }>;
+}
+
+/**
+ * Returns all cells occupied by an arrow on the grid.
+ * If length is > 1, it extends backwards from the head (x,y) or footprint.
+ */
+export function getOccupiedCells(arrow: Arrow): Array<{ x: number; y: number }> {
+  if (arrow.points && arrow.points.length > 0) {
+    return [...arrow.points];
+  }
+
+  const cells: Array<{ x: number; y: number }> = [];
+  const len = arrow.length || 1;
+
+  for (let i = 0; i < len; i++) {
+    let cx = arrow.x;
+    let cy = arrow.y;
+
+    if (arrow.direction === 'up') cy = arrow.y + i;
+    else if (arrow.direction === 'down') cy = arrow.y - i;
+    else if (arrow.direction === 'left') cx = arrow.x + i;
+    else if (arrow.direction === 'right') cx = arrow.x - i;
+
+    cells.push({ x: cx, y: cy });
+  }
+
+  return cells;
+}
+
+/**
+ * Checks whether an arrow can escape off the board without hitting any other arrow or obstacle.
+ */
+export function canArrowEscape(
+  arrow: Arrow,
+  activeArrows: Arrow[],
+  obstacles: Obstacle[] = [],
+  cols: number,
+  rows: number
+): EscapeCheckResult {
+  const trajectory: Array<{ x: number; y: number }> = [];
+
+  // Determine starting ray cell (just in front of the arrow head)
+  let curX = arrow.x;
+  let curY = arrow.y;
+
+  let dx = 0;
+  let dy = 0;
+
+  if (arrow.direction === 'up') dy = -1;
+  else if (arrow.direction === 'down') dy = 1;
+  else if (arrow.direction === 'left') dx = -1;
+  else if (arrow.direction === 'right') dx = 1;
+
+  // Build occupancy lookup for quick testing
+  const obstacleMap = new Map<string, Obstacle>();
+  for (const obs of obstacles) {
+    obstacleMap.set(`${obs.x},${obs.y}`, obs);
+  }
+
+  const arrowCellMap = new Map<string, { arrowId: string }>();
+  for (const other of activeArrows) {
+    if (other.id === arrow.id) continue;
+    const cells = getOccupiedCells(other);
+    for (const cell of cells) {
+      arrowCellMap.set(`${cell.x},${cell.y}`, { arrowId: other.id });
+    }
+  }
+
+  // Walk step by step toward boundary
+  let stepX = curX + dx;
+  let stepY = curY + dy;
+
+  while (stepX >= 0 && stepX < cols && stepY >= 0 && stepY < rows) {
+    trajectory.push({ x: stepX, y: stepY });
+
+    const key = `${stepX},${stepY}`;
+
+    // Check obstacle
+    if (obstacleMap.has(key)) {
+      const obs = obstacleMap.get(key)!;
+      return {
+        canEscape: false,
+        blocker: { x: stepX, y: stepY, id: obs.id, type: 'obstacle' },
+        escapeTrajectory: trajectory,
+      };
+    }
+
+    // Check other arrows
+    if (arrowCellMap.has(key)) {
+      const item = arrowCellMap.get(key)!;
+      return {
+        canEscape: false,
+        blocker: { x: stepX, y: stepY, id: item.arrowId, type: 'arrow' },
+        escapeTrajectory: trajectory,
+      };
+    }
+
+    stepX += dx;
+    stepY += dy;
+  }
+
+  // Also include the escape cell outside the board for smooth exit
+  trajectory.push({ x: stepX, y: stepY });
+
+  return {
+    canEscape: true,
+    escapeTrajectory: trajectory,
+  };
+}
+
+/**
+ * Returns list of arrows that can currently escape off the board.
+ */
+export function findEscapableArrows(
+  activeArrows: Arrow[],
+  obstacles: Obstacle[] = [],
+  cols: number,
+  rows: number
+): Arrow[] {
+  return activeArrows.filter((arrow) => {
+    return canArrowEscape(arrow, activeArrows, obstacles, cols, rows).canEscape;
+  });
+}
+
+/**
+ * Calculates 1-3 stars rating based on moves taken versus par.
+ */
+export function calculateStars(movesTaken: number, parMoves: number): number {
+  if (movesTaken <= parMoves) return 3;
+  if (movesTaken <= parMoves + 2) return 2;
+  return 1;
+}
+
+/**
+ * Returns rotation angle in degrees for rendering an arrow pointing in the given direction.
+ * 0deg is UP.
+ */
+export function getDirectionAngle(direction: Direction): number {
+  switch (direction) {
+    case 'up':
+      return 0;
+    case 'right':
+      return 90;
+    case 'down':
+      return 180;
+    case 'left':
+      return 270;
+  }
+}
