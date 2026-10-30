@@ -31,10 +31,10 @@ jobs:
           node-version: 22
 
       - name: Install project dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install Capacitor Android tooling
-        run: npm install --no-save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
+        run: npm install --legacy-peer-deps --no-save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
 
       - name: Build web game
         run: npm run build
