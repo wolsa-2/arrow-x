@@ -1,0 +1,11 @@
+{
+  "appId": "com.wolsa.arrowx",
+  "appName": "ARROW X",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
