@@ -53,17 +53,31 @@ test('Arrow is blocked when another arrow stands in its escape path', () => {
   assert.equal(escapable[0].id, 'b');
 });
 
-test('Arrow is blocked by obstacle on board', () => {
+test('Arrow is blocked by obstacle on board and objects remain independent', () => {
   const cols = 5;
   const rows = 5;
 
   const arrow: Arrow = { id: 'a1', x: 2, y: 3, direction: 'up' };
   const obstacle: Obstacle = { id: 'obs1', x: 2, y: 2, type: 'rock' };
 
+  // 1. Initial state
   const result = canArrowEscape(arrow, [arrow], [obstacle], cols, rows);
   assert.equal(result.canEscape, false);
   assert.equal(result.blocker?.id, 'obs1');
   assert.equal(result.blocker?.type, 'obstacle');
+
+  // 2. Obstacle coordinates remain completely invariant
+  assert.equal(obstacle.x, 2);
+  assert.equal(obstacle.y, 2);
+  assert.equal(obstacle.id, 'obs1');
+
+  // 3. Arrow pointing left from (2, 3) does NOT hit obstacle at (2, 2)
+  const arrowEscapingLeft: Arrow = { id: 'a2', x: 2, y: 3, direction: 'left' };
+  const leftResult = canArrowEscape(arrowEscapingLeft, [arrowEscapingLeft], [obstacle], cols, rows);
+  assert.equal(leftResult.canEscape, true);
+  // Obstacle unchanged
+  assert.equal(obstacle.x, 2);
+  assert.equal(obstacle.y, 2);
 });
 
 test('Star calculation awards 1 to 3 stars correctly', () => {

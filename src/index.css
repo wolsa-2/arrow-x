@@ -8,6 +8,17 @@
     box-sizing: border-box;
   }
 
+  *:focus, *:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  svg, svg *, g, path, polygon, circle, rect {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none !important;
+  }
+
   html, body, #root {
     margin: 0;
     padding: 0;

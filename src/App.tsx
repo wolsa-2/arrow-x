@@ -38,7 +38,9 @@ export default function App() {
     return progress.highestUnlockedLevel || 1;
   });
   const [isDailyActive, setIsDailyActive] = useState<boolean>(false);
-  const [hearts, setHearts] = useState<number>(3);
+  const [hearts, setHearts] = useState<number>(() => {
+    return typeof progress.hearts === 'number' ? Math.max(0, Math.min(3, progress.hearts)) : 3;
+  });
 
   // Modals & Screens
   const [isPaused, setIsPaused] = useState(false);
@@ -121,7 +123,7 @@ export default function App() {
     if (queryParams.autostart) {
       const targetLevel = queryParams.level || progress.highestUnlockedLevel || 1;
       setActiveLevelId(targetLevel);
-      setHearts(3);
+      setHearts((h) => (h > 0 ? h : 3));
       setScreen('playing');
       document.body.dataset.state = 'playing';
     }
@@ -136,34 +138,74 @@ export default function App() {
     }
   }, [settings.musicEnabled]);
 
+  // Passive life regeneration (1 life per 5 minutes when depleted)
+  useEffect(() => {
+    if (hearts >= 3) return;
+    const interval = setInterval(() => {
+      setHearts((currentHearts) => {
+        if (currentHearts >= 3) return 3;
+        const nextHearts = currentHearts + 1;
+        setProgress((prev) => {
+          const next = { ...prev, hearts: nextHearts, lastHeartLossTime: nextHearts >= 3 ? undefined : Date.now() };
+          saveProgress(next);
+          return next;
+        });
+        addToast('+1 Life Regenerated!', 'info');
+        return nextHearts;
+      });
+    }, 300000);
+    return () => clearInterval(interval);
+  }, [hearts, addToast]);
+
   // Start playing a level
-  const handleStartLevel = useCallback((lvlId: number) => {
-    setActiveLevelId(lvlId);
-    setIsDailyActive(false);
-    setHearts(3);
-    setIsPaused(false);
-    setIsGameOverOpen(false);
-    setCompletedResult(null);
-    setIsLevelSelectOpen(false);
-    setScreen('playing');
-    document.body.dataset.state = 'playing';
-  }, []);
+  const handleStartLevel = useCallback(
+    (lvlId: number) => {
+      if (hearts <= 0) {
+        setIsGameOverOpen(true);
+        addToast('No lives remaining! Watch an ad or refill.', 'warning');
+        return;
+      }
+      setActiveLevelId(lvlId);
+      setIsDailyActive(false);
+      setIsPaused(false);
+      setIsGameOverOpen(false);
+      setCompletedResult(null);
+      setIsLevelSelectOpen(false);
+      setScreen('playing');
+      document.body.dataset.state = 'playing';
+    },
+    [hearts, addToast]
+  );
 
   // Start daily challenge puzzle
   const handleStartDaily = useCallback(() => {
+    if (hearts <= 0) {
+      setIsGameOverOpen(true);
+      addToast('No lives remaining! Watch an ad or refill.', 'warning');
+      return;
+    }
     setIsDailyActive(true);
-    setHearts(3);
     setIsDailyOpen(false);
     setIsPaused(false);
     setIsGameOverOpen(false);
     setCompletedResult(null);
     setScreen('playing');
     document.body.dataset.state = 'playing';
-  }, []);
+  }, [hearts, addToast]);
 
   // Handle heart lost during play
   const handleHeartLost = useCallback((remainingHearts: number) => {
-    setHearts(remainingHearts);
+    const clamped = Math.max(0, Math.min(3, remainingHearts));
+    setHearts(clamped);
+    setProgress((prev) => {
+      const next = {
+        ...prev,
+        hearts: clamped,
+        lastHeartLossTime: clamped === 0 ? Date.now() : prev.lastHeartLossTime,
+      };
+      saveProgress(next);
+      return next;
+    });
   }, []);
 
   // Handle Game Over (0 lives reached)
@@ -310,13 +352,26 @@ export default function App() {
   );
 
   // Refill hearts with 100 coins from GameOver
+  // Refill hearts with 100 coins from GameOver
   const handleRefillHeartsWithCoins = useCallback(() => {
-    const success = handleBuyShopItem('hearts', 100);
-    if (success) {
-      setHearts(3);
-      setIsGameOverOpen(false);
+    if ((progress.coins ?? 0) < 100) {
+      addToast('Not enough coins! Watch an ad to get +1 life.', 'warning');
+      return;
     }
-  }, [handleBuyShopItem]);
+    setProgress((prev) => {
+      const next = {
+        ...prev,
+        coins: prev.coins - 100,
+        hearts: 3,
+        lastHeartLossTime: undefined,
+      };
+      saveProgress(next);
+      return next;
+    });
+    setHearts(3);
+    setIsGameOverOpen(false);
+    addToast('Lives Refilled to 3!', 'success');
+  }, [addToast, progress.coins]);
 
   // Claim Daily Streak Reward
   const handleClaimDailyReward = useCallback(
@@ -344,8 +399,17 @@ export default function App() {
   const handleRewardEarned = useCallback(
     (reward: AdReward) => {
       if (reward.type === 'extra_life') {
-        // Restore exactly 1 life and resume
+        // Restore strictly 1 life and resume
         setHearts(1);
+        setProgress((prev) => {
+          const next = {
+            ...prev,
+            hearts: 1,
+            lastHeartLossTime: undefined,
+          };
+          saveProgress(next);
+          return next;
+        });
         setIsGameOverOpen(false);
         addToast('+1 Life Granted! Keep escaping!', 'success');
       } else if (reward.type === 'coins') {
@@ -651,7 +715,7 @@ export default function App() {
           <line x1="5" y1="12" x2="19" y2="12"></line>
           <polyline points="12 5 19 12 12 19"></polyline>
         </svg>
-        <span className="text-slate-800 font-black tracking-wider">ARROW ESCAPE PUZZLE</span>
+        <span className="text-slate-800 font-black tracking-wider">ARROW X</span>
         <span className="text-slate-300">|</span>
         <span className="text-slate-500 font-semibold tracking-normal normal-case">Think • Plan • Escape</span>
       </footer>

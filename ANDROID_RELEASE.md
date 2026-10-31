@@ -1,26 +1,27 @@
-# Arrow Escape Puzzle — Android Release & Build Guide
+# ARROW X — Android Release & Build Guide
 
 ## 1. Application Identity & Metadata
-- **Application Name**: Arrow Escape Puzzle
-- **Package Name / Application ID**: `com.arrowescape.puzzle`
+- **Application Name**: ARROW X
+- **Package Name / Application ID**: `com.arrowx.game`
 - **Version**: `1.0.0`
 - **Version Code**: `1`
 - **Target SDK**: Android 14 (API 34)
 - **Minimum SDK**: Android 7.0 (API 24)
 - **Orientation**: Portrait (`portrait`)
-- **Theme Color**: `#0F172A`
+- **Theme Color**: `#FFFFFF`
+- **AdMob Rewarded Video Test Unit ID**: `ca-app-pub-3940256099942544/5224354917`
 
 ---
 
-## 2. Permissions & Child Safety Compliance
+## 2. Permissions & Safety Compliance
 - **Declared Permissions**:
-  - `android.permission.VIBRATE` (for tactile haptic feedback)
-- **Removed / Prohibited Permissions**:
-  - NO Internet access required (100% offline gameplay)
+  - `android.permission.VIBRATE` (for responsive haptic feedback)
+  - `android.permission.INTERNET` (optional for Google AdMob rewarded ads)
+  - `android.permission.ACCESS_NETWORK_STATE` (for online/offline network detection)
+- **Prohibited Permissions**:
   - NO Location (`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`)
   - NO Camera / Audio recording
   - NO Storage / Contacts / Phone state
-  - Fully compliant with Google Play Families Policy & COPPA guidelines (no third-party SDKs, no behavioral tracking, no ads).
 
 ---
 
@@ -30,15 +31,15 @@ To generate the native Android project and APK / AAB artifacts:
 
 ### Step 1: Install Capacitor CLI & Core
 ```bash
-npm install @capacitor/core
+npm install @capacitor/core @capacitor-community/admob
 npm install -D @capacitor/cli @capacitor/android
 ```
 
 ### Step 2: Initialize Capacitor Configuration (`capacitor.config.json`)
 ```json
 {
-  "appId": "com.arrowescape.puzzle",
-  "appName": "Arrow Escape Puzzle",
+  "appId": "com.arrowx.game",
+  "appName": "ARROW X",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "android": {

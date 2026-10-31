@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Arrow } from '../game/types';
 import {
   buildArrowTrack,
-  getSlicedArrowRenderData,
+  getArrowRenderData,
   SlicedArrowRenderData,
 } from '../game/pathAnimation';
 
@@ -29,20 +29,20 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
   onTap,
   onEscapeFinished,
 }) => {
-  // Pre-calculate polyline track for geometry and path slicing
+  // Pre-calculate polyline track and kinematic unbending parameters
   const track = useMemo(
     () => buildArrowTrack(arrow, cellSize, boardCols, boardRows),
     [arrow, cellSize, boardCols, boardRows]
   );
 
-  const [animProgress, setAnimProgress] = useState<number>(0);
+  const [animElapsed, setAnimElapsed] = useState<number>(0);
   const animFrameRef = useRef<number | null>(null);
   const onEscapeFinishedRef = useRef(onEscapeFinished);
   onEscapeFinishedRef.current = onEscapeFinished;
 
   useEffect(() => {
     if (!isEscaping) {
-      setAnimProgress(0);
+      setAnimElapsed(0);
       if (animFrameRef.current !== null) {
         cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = null;
@@ -50,23 +50,16 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
       return;
     }
 
-    // Animation started: calculate duration based on travel distance and consistent speed
-    // Speed: 9.5 cells per second for snappy, readable puzzle game escape motion
-    const speed = Math.max(280, cellSize * 9.5); // px/sec
-    const travelDistance = track.totalLength - track.initialArrowLength;
-    const durationMs = Math.max(320, Math.min(540, (travelDistance / speed) * 1000));
-
     let startTime: number | null = null;
+    const totalMs = track.totalDurationMs;
 
     const animate = (time: number) => {
       if (startTime === null) startTime = time;
       const elapsed = time - startTime;
-      const progress = Math.min(1, elapsed / durationMs);
 
-      // Frame-rate-independent consistent speed motion along the polyline track
-      setAnimProgress(progress);
+      setAnimElapsed(elapsed);
 
-      if (progress < 1) {
+      if (elapsed < totalMs) {
         animFrameRef.current = requestAnimationFrame(animate);
       } else {
         animFrameRef.current = null;
@@ -84,17 +77,17 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
         animFrameRef.current = null;
       }
     };
-  }, [arrow.id, cellSize, isEscaping, track]);
+  }, [arrow.id, isEscaping, track]);
 
-  // Compute sliced path at current progress
+  // Compute rendered SVG geometry for current phase
   const renderData: SlicedArrowRenderData | null = useMemo(() => {
     if (!isEscaping) {
-      return getSlicedArrowRenderData(track, 0);
+      return getArrowRenderData(track, 0);
     }
-    return getSlicedArrowRenderData(track, animProgress);
-  }, [track, isEscaping, animProgress]);
+    return getArrowRenderData(track, animElapsed);
+  }, [track, isEscaping, animElapsed]);
 
-  // If the arrow has completely exited the visible board, return null
+  // If the arrow has completely exited the visible board, unmount from SVG
   if (!renderData) {
     return null;
   }
@@ -109,8 +102,16 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
       id={`arrow-${arrow.id}`}
       style={{
         pointerEvents: isEscaping ? 'none' : 'auto',
+        outline: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
       }}
-      className={`cursor-pointer transition-colors duration-150 ${isBlocked ? 'animate-wiggle' : ''}`}
+      className={`cursor-pointer transition-opacity duration-100 outline-none focus:outline-none select-none active:opacity-80 ${isBlocked ? 'animate-wiggle' : ''}`}
+      onPointerDown={(e) => {
+        // Prevent default browser/webview selection outline
+        e.preventDefault();
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onTap(arrow);
@@ -124,7 +125,7 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
       }}
       aria-label={`Arrow pointing ${arrow.direction} at col ${arrow.x + 1}, row ${arrow.y + 1}`}
       role="button"
-      tabIndex={0}
+      tabIndex={-1}
     >
       {/* Invisible generous touch target hitbox along the path (minimum 44px touch area) */}
       <path
@@ -164,7 +165,7 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
         </>
       )}
 
-      {/* Main Arrow Stem (dynamically follows and slices polyline track) */}
+      {/* Main Arrow Stem (dynamically straightens first, then translates off-board) */}
       <path
         d={renderData.pathD}
         fill="none"
@@ -175,7 +176,7 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
         className="transition-colors duration-150"
       />
 
-      {/* Triangular Arrowhead (leads along path and turns at corners) */}
+      {/* Triangular Arrowhead (continuously anchored and aligned with stem) */}
       <polygon
         points={renderData.arrowHeadPoints}
         fill={strokeColor}

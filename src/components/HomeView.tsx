@@ -85,24 +85,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       {/* Center Branding & Action Buttons matching Reference Screen 2 */}
       <main className="w-full my-auto flex flex-col items-center justify-center text-center px-4">
-        {/* Arrow Escape Puzzle Logo */}
+        {/* ARROW X Logo matching Reference */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#0077FE] fill-current">
               <path d="M4 12 L14 4 L14 9 L20 9 L20 15 L14 15 L14 20 Z" />
             </svg>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#0A1931]">
-              ARROW
+              ARROW <span className="text-[#0077FE]">X</span>
             </h1>
             <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#0077FE] fill-current">
               <path d="M20 12 L10 4 L10 9 L4 9 L4 15 L10 15 L10 20 Z" />
             </svg>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#0A1931] -mt-1">
-            ESCAPE
-          </h1>
-          <span className="text-base font-extrabold tracking-[0.25em] text-[#0077FE] mt-0.5">
-            PUZZLE
+          <span className="text-xs font-black tracking-[0.28em] text-slate-400 mt-1 uppercase">
+            Escape Puzzle
           </span>
         </div>
 

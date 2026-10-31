@@ -21,6 +21,8 @@ export const DEFAULT_PROGRESS: SavedProgress = {
   undosCount: 3,
   dailyStreak: 0,
   dailyRewardsClaimed: [],
+  hearts: 3,
+  lastHeartLossTime: undefined,
 };
 
 export function loadSettings(): UserSettings {
@@ -62,6 +64,8 @@ export function loadProgress(): SavedProgress {
       dailyRewardsClaimed: Array.isArray(parsed.dailyRewardsClaimed) ? parsed.dailyRewardsClaimed : [],
       dailyChallengeDate: parsed.dailyChallengeDate,
       dailyChallengeCompleted: parsed.dailyChallengeCompleted,
+      hearts: typeof parsed.hearts === 'number' ? Math.max(0, Math.min(3, parsed.hearts)) : 3,
+      lastHeartLossTime: parsed.lastHeartLossTime,
     };
   } catch {
     return DEFAULT_PROGRESS;

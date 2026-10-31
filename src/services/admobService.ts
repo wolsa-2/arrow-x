@@ -19,6 +19,8 @@ class AdMobService {
   private testAdUnitId: string = ADMOB_TEST_REWARDED_UNIT_ID;
   private simulateNetworkFailure: boolean = false;
   private currentRewardCallback: ((reward: AdReward) => void) | null = null;
+  private currentRewardType: string = 'extra_life';
+  private currentRewardAmount: number = 1;
   private isRewardClaimed: boolean = false;
 
   constructor() {
@@ -83,6 +85,8 @@ class AdMobService {
 
     this.state = 'playing';
     this.isRewardClaimed = false;
+    this.currentRewardType = rewardType;
+    this.currentRewardAmount = amount;
     this.currentRewardCallback = onReward;
     return true;
   }
@@ -110,10 +114,10 @@ class AdMobService {
   }
 
   /**
-   * Complete current ad session
+   * Complete current ad session and claim the reward strictly once
    */
-  public completeCurrentAdSession(): void {
-    this.state = 'rewarded';
+  public completeCurrentAdSession(): boolean {
+    return this.claimReward(this.currentRewardType, this.currentRewardAmount);
   }
 
   /**

@@ -1,6 +1,6 @@
 {
-  "name": "Arrow Escape Puzzle",
-  "description": "Premium mobile casual puzzle game where players guide directional arrows safely off the board through clear escape paths across 200 campaign levels and unlimited Ultra Pro Max procedural challenges.",
+  "name": "ARROW X",
+  "description": "ARROW X is a premium mobile arrow escape puzzle game where players guide directional arrows safely off the board through clear escape paths across 200 campaign levels.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

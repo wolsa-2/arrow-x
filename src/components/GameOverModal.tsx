@@ -19,6 +19,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   soundEnabled,
   hapticsEnabled,
   onWatchAdForLife,
+  onRefillWithCoins,
   onRestart,
   onHome,
 }) => {
@@ -65,17 +66,18 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <span className="text-white/90 font-medium text-xs ml-1">+1 Life</span>
           </button>
 
-          {/* 2. Outlined Blue Button: Retry Level */}
+          {/* 2. Refill with 100 Coins Button */}
           <button
             type="button"
             onClick={() => {
               sound.playButton(soundEnabled);
-              triggerHaptic('light', settingsHaptic(hapticsEnabled));
-              onRestart();
+              triggerHaptic('medium', hapticsEnabled);
+              onRefillWithCoins();
             }}
-            className="w-full py-2.5 px-6 rounded-full bg-white border-2 border-[#0077FE] hover:bg-blue-50/50 active:scale-95 text-[#0077FE] font-extrabold text-sm shadow-2xs transition-all cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-full bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-extrabold text-xs shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            Retry Level
+            <span>Refill 3 Lives</span>
+            <span className="bg-amber-700/40 px-2 py-0.5 rounded-full text-[11px] font-bold">100 Coins</span>
           </button>
 
           {/* 3. Outlined Blue Button: Main Menu */}

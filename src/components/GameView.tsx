@@ -115,11 +115,15 @@ export const GameView: React.FC<GameViewProps> = ({
     return () => window.removeEventListener('resize', updateBoardSize);
   }, [updateBoardSize]);
 
+  // Tap processing lock to strictly prevent duplicate taps or rapid multi-heart loss
+  const isProcessingTapRef = useRef<boolean>(false);
+
   // Arrow Tap Handler with collision check before starting animation
   const handleArrowTap = useCallback(
     (arrow: Arrow) => {
-      // Reject taps if an arrow is escaping, puzzle completed, or out of hearts
-      if (escapingId !== null || isCompleted || hearts <= 0) return;
+      // Reject taps if already processing, escaping, puzzle completed, or out of hearts
+      if (isProcessingTapRef.current || escapingId !== null || isCompleted || hearts <= 0) return;
+      isProcessingTapRef.current = true;
 
       setHintId(null);
       setBlockedId(null);
@@ -133,6 +137,7 @@ export const GameView: React.FC<GameViewProps> = ({
         const nextActive = activeArrows.filter((a) => a.id !== arrow.id);
         setActiveArrows(nextActive);
         onUseBomb(arrow.id);
+        isProcessingTapRef.current = false;
 
         if (nextActive.length === 0) {
           setIsCompleted(true);
@@ -160,10 +165,14 @@ export const GameView: React.FC<GameViewProps> = ({
 
         if (nextHearts === 0) {
           setTimeout(() => {
+            isProcessingTapRef.current = false;
             onGameOver();
           }, 400);
         } else {
-          setTimeout(() => setBlockedId(null), 400);
+          setTimeout(() => {
+            setBlockedId(null);
+            isProcessingTapRef.current = false;
+          }, 350);
         }
         return;
       }
@@ -186,6 +195,7 @@ export const GameView: React.FC<GameViewProps> = ({
       const nextActive = activeArrows.filter((a) => a.id !== arrowId);
       setActiveArrows(nextActive);
       setEscapingId(null);
+      isProcessingTapRef.current = false;
 
       // Check level completion
       if (nextActive.length === 0) {
@@ -452,23 +462,31 @@ export const GameView: React.FC<GameViewProps> = ({
             })}
           </svg>
 
-          {/* Obstacles (if any) */}
-          {level.obstacles?.map((obs) => (
-            <div
-              key={obs.id}
-              className="absolute flex items-center justify-center pointer-events-none z-30"
-              style={{
-                left: `${obs.x * cellSize}px`,
-                top: `${obs.y * cellSize}px`,
-                width: `${cellSize}px`,
-                height: `${cellSize}px`,
-              }}
-            >
-              <div className="w-8 h-8 rounded-xl bg-slate-400 border border-slate-500 shadow-md flex items-center justify-center text-white text-xs font-black">
-                ✕
+          {/* Independent Static Obstacles (Never move with arrows) */}
+          {level.obstacles?.map((obs) => {
+            const size = Math.max(26, cellSize * 0.6);
+            return (
+              <div
+                key={`obs-${level.id}-${obs.id}-${obs.x}-${obs.y}`}
+                className="absolute flex items-center justify-center pointer-events-none select-none z-10"
+                style={{
+                  left: `${obs.x * cellSize}px`,
+                  top: `${obs.y * cellSize}px`,
+                  width: `${cellSize}px`,
+                  height: `${cellSize}px`,
+                }}
+              >
+                <div
+                  className="rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 border-2 border-slate-400 shadow-xs flex items-center justify-center text-slate-600 font-black"
+                  style={{ width: `${size}px`, height: `${size}px` }}
+                >
+                  <div className="w-3.5 h-3.5 rounded-sm bg-slate-400/50 flex items-center justify-center">
+                    <span className="text-[10px] leading-none text-slate-700">✕</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 

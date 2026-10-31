@@ -79,6 +79,8 @@ export interface SavedProgress {
   dailyRewardsClaimed?: number[];
   dailyChallengeDate?: string;
   dailyChallengeCompleted?: boolean;
+  hearts?: number;
+  lastHeartLossTime?: number;
 }
 
 export type AdMobRewardType = 'extra_life' | 'coins' | 'hint';
