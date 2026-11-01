@@ -7,12 +7,11 @@ import {
   Lightbulb,
   Hash,
   Undo2,
-  RotateCcw,
   Bomb,
-  Sparkles,
 } from 'lucide-react';
 import { Arrow, LevelData, UserSettings } from '../game/types';
 import { canArrowEscape, findEscapableArrows, calculateStars } from '../game/rules';
+import { cloneArrows } from '../game/levels';
 import { WindingArrow } from './WindingArrow';
 import { sound, triggerHaptic } from '../utils/audio';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -25,11 +24,13 @@ interface GameViewProps {
   hintsRemaining: number;
   bombsRemaining: number;
   undosRemaining: number;
+  isPaused?: boolean;
   onHeartLost: (remainingHearts: number) => void;
   onUseHint: () => void;
   onUseBomb: (arrowId: string) => void;
   onUseUndo: () => void;
   onPause: () => void;
+  onRestart?: () => void;
   onLevelComplete: (stars: number, moves: number, timeSeconds: number) => void;
   onGameOver: () => void;
   onOpenLevelSelect: () => void;
@@ -44,16 +45,19 @@ export const GameView: React.FC<GameViewProps> = ({
   hintsRemaining,
   bombsRemaining,
   undosRemaining,
+  isPaused = false,
   onHeartLost,
   onUseHint,
   onUseBomb,
   onUseUndo,
   onPause,
+  onRestart,
   onLevelComplete,
   onGameOver,
   onOpenLevelSelect,
 }) => {
-  const [activeArrows, setActiveArrows] = useState<Arrow[]>(() => [...level.arrows]);
+  // Always initialize active arrows from pristine cloned level arrows
+  const [activeArrows, setActiveArrows] = useState<Arrow[]>(() => cloneArrows(level.arrows));
   const [history, setHistory] = useState<Arrow[][]>([]);
   const [moves, setMoves] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -68,18 +72,47 @@ export const GameView: React.FC<GameViewProps> = ({
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState<number>(64);
 
-  // In-game timer
+  // Animation and completion timeout refs to prevent stale callbacks
+  const victoryTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
+  const gameOverTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
+  const blockedTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
+
+  const clearAllPendingTimeouts = useCallback(() => {
+    if (victoryTimeoutRef.current !== null) {
+      clearTimeout(victoryTimeoutRef.current as any);
+      victoryTimeoutRef.current = null;
+    }
+    if (gameOverTimeoutRef.current !== null) {
+      clearTimeout(gameOverTimeoutRef.current as any);
+      gameOverTimeoutRef.current = null;
+    }
+    if (blockedTimeoutRef.current !== null) {
+      clearTimeout(blockedTimeoutRef.current as any);
+      blockedTimeoutRef.current = null;
+    }
+  }, []);
+
+  // In-game timer (pauses when paused, completed, or out of hearts)
   useEffect(() => {
-    if (isCompleted || hearts <= 0) return;
+    if (isCompleted || hearts <= 0 || isPaused) return;
     const interval = setInterval(() => {
       setElapsedSeconds((s) => s + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [isCompleted, hearts]);
+  }, [isCompleted, hearts, isPaused]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearAllPendingTimeouts();
+    };
+  }, [clearAllPendingTimeouts]);
 
   // Reset when level changes
   useEffect(() => {
-    setActiveArrows([...level.arrows]);
+    clearAllPendingTimeouts();
+    isProcessingTapRef.current = false;
+    setActiveArrows(cloneArrows(level.arrows));
     setHistory([]);
     setMoves(0);
     setElapsedSeconds(0);
@@ -89,7 +122,7 @@ export const GameView: React.FC<GameViewProps> = ({
     setIsBombActive(false);
     setIsCompleted(false);
     setShowRestartConfirm(false);
-  }, [level]);
+  }, [clearAllPendingTimeouts, level]);
 
   // Dynamically compute grid cell size to maximize board presence on mobile
   const updateBoardSize = useCallback(() => {
@@ -121,8 +154,16 @@ export const GameView: React.FC<GameViewProps> = ({
   // Arrow Tap Handler with collision check before starting animation
   const handleArrowTap = useCallback(
     (arrow: Arrow) => {
-      // Reject taps if already processing, escaping, puzzle completed, or out of hearts
-      if (isProcessingTapRef.current || escapingId !== null || isCompleted || hearts <= 0) return;
+      // Reject taps if already processing, escaping, paused, puzzle completed, or out of hearts
+      if (
+        isProcessingTapRef.current ||
+        escapingId !== null ||
+        isCompleted ||
+        hearts <= 0 ||
+        isPaused
+      ) {
+        return;
+      }
       isProcessingTapRef.current = true;
 
       setHintId(null);
@@ -144,7 +185,8 @@ export const GameView: React.FC<GameViewProps> = ({
           sound.playVictory(settings.soundEnabled);
           triggerHaptic('double', settings.hapticsEnabled);
           const stars = calculateStars(moves + 1, level.parMoves);
-          setTimeout(() => {
+          clearAllPendingTimeouts();
+          victoryTimeoutRef.current = setTimeout(() => {
             onLevelComplete(stars, moves + 1, elapsedSeconds);
           }, 350);
         }
@@ -163,13 +205,14 @@ export const GameView: React.FC<GameViewProps> = ({
         const nextHearts = Math.max(0, hearts - 1);
         onHeartLost(nextHearts);
 
+        clearAllPendingTimeouts();
         if (nextHearts === 0) {
-          setTimeout(() => {
+          gameOverTimeoutRef.current = setTimeout(() => {
             isProcessingTapRef.current = false;
             onGameOver();
           }, 400);
         } else {
-          setTimeout(() => {
+          blockedTimeoutRef.current = setTimeout(() => {
             setBlockedId(null);
             isProcessingTapRef.current = false;
           }, 350);
@@ -182,7 +225,27 @@ export const GameView: React.FC<GameViewProps> = ({
       triggerHaptic('light', settings.hapticsEnabled);
       setEscapingId(arrow.id);
     },
-    [activeArrows, elapsedSeconds, escapingId, hearts, isBombActive, isCompleted, level.cols, level.obstacles, level.parMoves, level.rows, moves, onGameOver, onHeartLost, onLevelComplete, onUseBomb, settings.hapticsEnabled, settings.soundEnabled]
+    [
+      activeArrows,
+      clearAllPendingTimeouts,
+      elapsedSeconds,
+      escapingId,
+      hearts,
+      isBombActive,
+      isCompleted,
+      isPaused,
+      level.cols,
+      level.obstacles,
+      level.parMoves,
+      level.rows,
+      moves,
+      onGameOver,
+      onHeartLost,
+      onLevelComplete,
+      onUseBomb,
+      settings.hapticsEnabled,
+      settings.soundEnabled,
+    ]
   );
 
   // Called strictly when arrow finishes escaping off the board
@@ -204,22 +267,40 @@ export const GameView: React.FC<GameViewProps> = ({
         triggerHaptic('double', settings.hapticsEnabled);
 
         const stars = calculateStars(nextMoves, level.parMoves);
-        setTimeout(() => {
+        clearAllPendingTimeouts();
+        victoryTimeoutRef.current = setTimeout(() => {
           onLevelComplete(stars, nextMoves, elapsedSeconds);
         }, 350);
       }
     },
-    [activeArrows, elapsedSeconds, level.parMoves, moves, onLevelComplete, settings.hapticsEnabled, settings.soundEnabled]
+    [
+      activeArrows,
+      clearAllPendingTimeouts,
+      elapsedSeconds,
+      level.parMoves,
+      moves,
+      onLevelComplete,
+      settings.hapticsEnabled,
+      settings.soundEnabled,
+    ]
   );
 
   // Undo move
   const handleUndo = () => {
-    if (history.length === 0 || escapingId !== null || isCompleted || undosRemaining <= 0) return;
+    if (
+      history.length === 0 ||
+      escapingId !== null ||
+      isCompleted ||
+      undosRemaining <= 0 ||
+      isPaused
+    ) {
+      return;
+    }
     sound.playUndo(settings.soundEnabled);
     triggerHaptic('light', settings.hapticsEnabled);
 
     const prevArrows = history[history.length - 1];
-    setActiveArrows(prevArrows);
+    setActiveArrows(cloneArrows(prevArrows));
     setHistory((h) => h.slice(0, -1));
     setMoves((m) => Math.max(0, m - 1));
     setHintId(null);
@@ -228,7 +309,7 @@ export const GameView: React.FC<GameViewProps> = ({
 
   // Hint button: highlights escapable arrow
   const handleHint = () => {
-    if (escapingId !== null || isCompleted || hintsRemaining <= 0) return;
+    if (escapingId !== null || isCompleted || hintsRemaining <= 0 || isPaused) return;
     const obstacles = level.obstacles || [];
     const escapable = findEscapableArrows(activeArrows, obstacles, level.cols, level.rows);
 
@@ -242,25 +323,41 @@ export const GameView: React.FC<GameViewProps> = ({
 
   // Toggle bomb mode
   const handleBombToggle = () => {
-    if (escapingId !== null || isCompleted || bombsRemaining <= 0) return;
+    if (escapingId !== null || isCompleted || bombsRemaining <= 0 || isPaused) return;
     sound.playButton(settings.soundEnabled);
     triggerHaptic('light', settings.hapticsEnabled);
     setIsBombActive(!isBombActive);
   };
 
-  // Restart level
-  const handleRestart = () => {
+  // Centralized level restart
+  const handleRestart = useCallback(() => {
     sound.playButton(settings.soundEnabled);
     triggerHaptic('light', settings.hapticsEnabled);
-    setActiveArrows([...level.arrows]);
+    clearAllPendingTimeouts();
+    isProcessingTapRef.current = false;
+
+    if (onRestart) {
+      onRestart();
+      return;
+    }
+
+    setActiveArrows(cloneArrows(level.arrows));
     setHistory([]);
     setMoves(0);
     setElapsedSeconds(0);
-    setHintId(null);
+    setEscapingId(null);
     setBlockedId(null);
+    setHintId(null);
     setIsBombActive(false);
+    setIsCompleted(false);
     setShowRestartConfirm(false);
-  };
+  }, [
+    clearAllPendingTimeouts,
+    level.arrows,
+    onRestart,
+    settings.hapticsEnabled,
+    settings.soundEnabled,
+  ]);
 
   const remainingCount = activeArrows.length;
   const boardWidth = level.cols * cellSize;
@@ -382,7 +479,8 @@ export const GameView: React.FC<GameViewProps> = ({
             </button>
           </div>
         </div>
-        <div className="w-full px-1">
+
+        <div className="w-full px-1 mt-2">
           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
             <div
               className={`h-full transition-all duration-300 rounded-full ${
@@ -397,7 +495,7 @@ export const GameView: React.FC<GameViewProps> = ({
 
         {/* Bomb Mode Banner */}
         {isBombActive && (
-          <div className="w-full py-1.5 px-3 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold flex items-center justify-center gap-2 animate-pulse">
+          <div className="w-full py-1.5 px-3 mt-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold flex items-center justify-center gap-2 animate-pulse">
             <Bomb className="w-3.5 h-3.5" />
             <span>Bomb Active: Tap any blocking arrow to destroy it!</span>
           </div>
@@ -461,32 +559,6 @@ export const GameView: React.FC<GameViewProps> = ({
               );
             })}
           </svg>
-
-          {/* Independent Static Obstacles (Never move with arrows) */}
-          {level.obstacles?.map((obs) => {
-            const size = Math.max(26, cellSize * 0.6);
-            return (
-              <div
-                key={`obs-${level.id}-${obs.id}-${obs.x}-${obs.y}`}
-                className="absolute flex items-center justify-center pointer-events-none select-none z-10"
-                style={{
-                  left: `${obs.x * cellSize}px`,
-                  top: `${obs.y * cellSize}px`,
-                  width: `${cellSize}px`,
-                  height: `${cellSize}px`,
-                }}
-              >
-                <div
-                  className="rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 border-2 border-slate-400 shadow-xs flex items-center justify-center text-slate-600 font-black"
-                  style={{ width: `${size}px`, height: `${size}px` }}
-                >
-                  <div className="w-3.5 h-3.5 rounded-sm bg-slate-400/50 flex items-center justify-center">
-                    <span className="text-[10px] leading-none text-slate-700">✕</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </main>
 
@@ -499,9 +571,9 @@ export const GameView: React.FC<GameViewProps> = ({
           type="button"
           aria-label={`Undo move (${undosRemaining} remaining)`}
           onClick={handleUndo}
-          disabled={history.length === 0 || escapingId !== null || undosRemaining <= 0}
+          disabled={history.length === 0 || escapingId !== null || undosRemaining <= 0 || isPaused}
           className={`w-11 h-11 rounded-full bg-white shadow-xs border border-slate-200 flex items-center justify-center transition-transform active:scale-90 ${
-            history.length > 0 && undosRemaining > 0
+            history.length > 0 && undosRemaining > 0 && !isPaused
               ? 'text-slate-600 hover:text-blue-600 cursor-pointer'
               : 'text-slate-300 cursor-not-allowed opacity-40'
           }`}
@@ -514,9 +586,9 @@ export const GameView: React.FC<GameViewProps> = ({
           type="button"
           aria-label={`Get a hint (${hintsRemaining} remaining)`}
           onClick={handleHint}
-          disabled={hintsRemaining <= 0 || escapingId !== null}
+          disabled={hintsRemaining <= 0 || escapingId !== null || isPaused}
           className={`relative w-16 h-16 rounded-full bg-white shadow-xl shadow-blue-500/15 border border-slate-100 flex items-center justify-center transition-transform active:scale-95 cursor-pointer ${
-            hintsRemaining > 0
+            hintsRemaining > 0 && !isPaused
               ? 'text-[#0077FE] hover:text-[#0066E0]'
               : 'text-slate-300 cursor-not-allowed opacity-60'
           }`}
@@ -546,11 +618,11 @@ export const GameView: React.FC<GameViewProps> = ({
           type="button"
           aria-label={`Bomb power-up (${bombsRemaining} remaining)`}
           onClick={handleBombToggle}
-          disabled={bombsRemaining <= 0 || escapingId !== null}
+          disabled={bombsRemaining <= 0 || escapingId !== null || isPaused}
           className={`w-11 h-11 rounded-full border border-slate-200 flex items-center justify-center transition-transform active:scale-90 ${
             isBombActive
               ? 'bg-purple-600 text-white border-purple-700 shadow-md'
-              : bombsRemaining > 0
+              : bombsRemaining > 0 && !isPaused
               ? 'bg-white text-purple-600 hover:text-purple-700 cursor-pointer shadow-xs'
               : 'bg-white text-slate-300 cursor-not-allowed opacity-40 shadow-xs'
           }`}

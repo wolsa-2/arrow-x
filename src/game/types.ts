@@ -6,14 +6,27 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export type ArrowColor = 'cyan' | 'teal' | 'coral' | 'amber' | 'violet' | 'indigo' | 'emerald' | 'rose';
 
+export type ArrowPattern =
+  | 'straight'
+  | 'l_shape'
+  | 'reverse_l_shape'
+  | 'u_shape'
+  | 'reverse_u_shape'
+  | 's_shape'
+  | 'z_shape'
+  | 'double_bend'
+  | 'triple_bend'
+  | 'long_zigzag';
+
 export interface Arrow {
   id: string;
   x: number; // 0-indexed column (head position)
   y: number; // 0-indexed row (head position)
   direction: Direction;
   color?: ArrowColor;
-  length?: number; // 1 = 1x1 cell, 2 = 1x2 or 2x1 cell
+  length?: number; // Total dots in path (3 to 13)
   points?: Array<{ x: number; y: number }>; // Full orthogonal path from tail to head
+  pattern?: ArrowPattern;
 }
 
 export interface Obstacle {

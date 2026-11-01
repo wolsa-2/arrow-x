@@ -114,7 +114,9 @@ test('Ultra Pro Max level generation satisfies complexity and solvability', () =
   // Test a campaign Ultra Pro Max level (e.g. Level 180)
   const upmLevel = getLevelById(180);
   assert.equal(upmLevel.difficulty, 'ultra_pro_max');
-  assert.ok(upmLevel.arrows.length >= 20, 'Ultra Pro Max must have high arrow density');
+  assert.ok(upmLevel.arrows.length >= 12, 'Ultra Pro Max must have high arrow count');
+  const occupiedDots = upmLevel.arrows.reduce((sum, a) => sum + (a.points?.length || 1), 0);
+  assert.ok(occupiedDots >= 40, 'Ultra Pro Max must have high arrow grid coverage with 3-13 dot arrows');
 
   const validation = testAndValidateLevel(upmLevel);
   assert.equal(validation.valid, true);

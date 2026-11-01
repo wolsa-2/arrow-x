@@ -108,11 +108,8 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
         WebkitUserSelect: 'none',
       }}
       className={`cursor-pointer transition-opacity duration-100 outline-none focus:outline-none select-none active:opacity-80 ${isBlocked ? 'animate-wiggle' : ''}`}
-      onPointerDown={(e) => {
-        // Prevent default browser/webview selection outline
-        e.preventDefault();
-      }}
       onClick={(e) => {
+        e.preventDefault();
         e.stopPropagation();
         onTap(arrow);
       }}

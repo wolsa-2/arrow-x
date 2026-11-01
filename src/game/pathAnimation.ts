@@ -14,19 +14,20 @@ export interface ArrowTrack {
   strokeWidth: number;
   arrowHeadSize: number;
   isBent: boolean;
-  totalLength: number;
+  totalLength: number; // Resting body length (arc length from tail to head)
+  totalDurationMs: number; // Total escape duration
+  exitDistance: number; // Distance traveled from head to off-screen
+  // Guide polyline: resting body vertices + forward exit ray
+  guideVertices: Point2D[];
+  cumulativeDistances: number[]; // Arc lengths along guideVertices
+  // Backward compatibility fields
   straightenDurationMs: number;
   exitDurationMs: number;
-  totalDurationMs: number;
-  exitDistance: number;
-  // Kinematic backward chain from head anchor to tail
-  segmentLengths: number[];
-  segmentDeltaThetas: number[];
-  backwardAngle: number;
-  // Backward compatibility fields
-  vertices: Point2D[];
-  cumulativeDistances: number[];
   initialArrowLength: number;
+  vertices: Point2D[];
+  segmentLengths?: number[];
+  segmentDeltaThetas?: number[];
+  backwardAngle?: number;
 }
 
 export interface SlicedArrowRenderData {
@@ -40,8 +41,8 @@ export interface SlicedArrowRenderData {
 export type ArrowRenderData = SlicedArrowRenderData;
 
 /**
- * Builds geometric and kinematic track data for an arrow.
- * Supports straight, L-shaped, and multi-segment winding arrows.
+ * Builds the geometric track and arc-length guide trajectory for an arrow.
+ * Preserves the exact multi-turn geometry for snake-like path-following movement.
  */
 export function buildArrowTrack(
   arrow: Arrow,
@@ -59,14 +60,15 @@ export function buildArrowTrack(
   const strokeWidth = Math.max(5.5, Math.min(8.5, cellSize * 0.13));
   const arrowHeadSize = Math.max(14, Math.min(22, cellSize * 0.34));
 
-  const rawPoints = arrow.points && arrow.points.length > 0
-    ? arrow.points
-    : [{ x: arrow.x, y: arrow.y }];
+  const rawPoints =
+    arrow.points && arrow.points.length > 0
+      ? arrow.points
+      : [{ x: arrow.x, y: arrow.y }];
 
   const bodyVertices: Point2D[] = [];
 
   if (rawPoints.length === 1) {
-    // Single node arrow: synthesize straight stem aligned with direction
+    // Single-node arrow: generate straight stem aligned with direction
     const headX = rawPoints[0].x * cellSize + cellSize / 2;
     const headY = rawPoints[0].y * cellSize + cellSize / 2;
     const tailX = headX - dx * (cellSize * 0.28);
@@ -90,13 +92,14 @@ export function buildArrowTrack(
     const inDy = Math.sign(lastP.y - prevP.y);
 
     if (inDx === dx && inDy === dy) {
+      // Last segment is already aligned with exit direction; cap cleanly into arrowhead base
       const lastIdx = bodyVertices.length - 1;
       bodyVertices[lastIdx] = {
         x: bodyVertices[lastIdx].x + dx * (strokeWidth * 0.5),
         y: bodyVertices[lastIdx].y + dy * (strokeWidth * 0.5),
       };
     } else {
-      // Arrow turns at head into exit direction
+      // Arrow turns into exit direction at head
       const lastVertex = bodyVertices[bodyVertices.length - 1];
       bodyVertices.push({
         x: lastVertex.x + dx * (cellSize * 0.22),
@@ -105,61 +108,46 @@ export function buildArrowTrack(
     }
   }
 
-  // Head anchor is the final vertex in bodyVertices
+  // Head anchor is the final vertex of the resting body
   const headAnchor = { ...bodyVertices[bodyVertices.length - 1] };
 
-  // Calculate segment lengths and angles backwards from head anchor to tail
-  // Chain: P_0 = headAnchor, P_1 = bodyVertices[N-2], ..., P_{N-1} = tail
-  const backwardAngle = Math.atan2(-dy, -dx);
-  const segmentLengths: number[] = [];
-  const segmentDeltaThetas: number[] = [];
+  // Calculate cumulative arc lengths along the resting body and detect bends
+  const cumulativeDistances: number[] = [0];
   let totalLength = 0;
   let isBent = false;
 
-  for (let i = bodyVertices.length - 1; i > 0; i--) {
-    const current = bodyVertices[i];
-    const prev = bodyVertices[i - 1]; // going backwards towards tail
-    const segDx = prev.x - current.x;
-    const segDy = prev.y - current.y;
-    const len = Math.sqrt(segDx * segDx + segDy * segDy);
-    segmentLengths.push(len);
+  for (let i = 1; i < bodyVertices.length; i++) {
+    const segDx = bodyVertices[i].x - bodyVertices[i - 1].x;
+    const segDy = bodyVertices[i].y - bodyVertices[i - 1].y;
+    const len = Math.hypot(segDx, segDy);
     totalLength += len;
+    cumulativeDistances.push(totalLength);
 
-    const segAngle = Math.atan2(segDy, segDx);
-    let dTheta = (segAngle - backwardAngle) % (2 * Math.PI);
-    if (dTheta > Math.PI) dTheta -= 2 * Math.PI;
-    if (dTheta < -Math.PI) dTheta += 2 * Math.PI;
-    segmentDeltaThetas.push(dTheta);
-
-    if (Math.abs(dTheta) > 0.03) {
-      isBent = true;
+    if (i > 1) {
+      const prevDx = bodyVertices[i - 1].x - bodyVertices[i - 2].x;
+      const prevDy = bodyVertices[i - 1].y - bodyVertices[i - 2].y;
+      if (Math.abs(segDx * prevDy - segDy * prevDx) > 1e-4) {
+        isBent = true;
+      }
     }
   }
-
-  // Timings:
-  // Phase 1 (straighten): 190ms for bent arrows, 0ms for already-straight arrows
-  // Phase 2 (translate): 290ms for clean, snappy escape
-  const straightenDurationMs = isBent ? 190 : 0;
-  const exitDurationMs = 290;
-  const totalDurationMs = straightenDurationMs + exitDurationMs;
 
   // Exit distance ensures the entire arrow tail completely exits the game board viewport
   const maxDim = Math.max(boardCols, boardRows) * cellSize;
   const exitDistance = maxDim + totalLength + cellSize * 3;
 
-  // Backward compatibility: cumulative distances and vertices
-  const cumulativeDistances: number[] = [0];
-  for (let i = 1; i < bodyVertices.length; i++) {
-    const segDx = bodyVertices[i].x - bodyVertices[i - 1].x;
-    const segDy = bodyVertices[i].y - bodyVertices[i - 1].y;
-    cumulativeDistances.push(cumulativeDistances[i - 1] + Math.sqrt(segDx * segDx + segDy * segDy));
-  }
+  // The guide polyline consists of the resting body plus the straight forward exit ray
   const exitVertex: Point2D = {
     x: headAnchor.x + dx * exitDistance,
     y: headAnchor.y + dy * exitDistance,
   };
-  const vertices: Point2D[] = [...bodyVertices, exitVertex];
-  cumulativeDistances.push(cumulativeDistances[cumulativeDistances.length - 1] + exitDistance);
+  const guideVertices: Point2D[] = [...bodyVertices, exitVertex];
+  cumulativeDistances.push(totalLength + exitDistance);
+
+  // Total escape duration: responsive and snappy while allowing clear snake traversal
+  const totalDurationMs = Math.round(
+    Math.max(340, Math.min(440, 320 + totalLength * 0.2))
+  );
 
   return {
     arrowId: arrow.id,
@@ -171,23 +159,94 @@ export function buildArrowTrack(
     arrowHeadSize,
     isBent,
     totalLength,
-    straightenDurationMs,
-    exitDurationMs,
     totalDurationMs,
     exitDistance,
-    segmentLengths,
-    segmentDeltaThetas,
-    backwardAngle,
-    vertices,
+    guideVertices,
     cumulativeDistances,
+    // Backward compatibility fields
+    straightenDurationMs: 0,
+    exitDurationMs: totalDurationMs,
     initialArrowLength: totalLength,
+    vertices: guideVertices,
   };
 }
 
 /**
+ * Extracts a continuous sub-curve from a polyline between arc lengths uStart and uEnd.
+ * Preserves all intermediate corner vertices between uStart and uEnd.
+ * Returns an array of Point2D ordered from uStart to uEnd.
+ */
+export function slicePolylineByArcLength(
+  vertices: Point2D[],
+  cumDist: number[],
+  uStart: number,
+  uEnd: number
+): Point2D[] {
+  const K = vertices.length - 1;
+  const totalLength = cumDist[cumDist.length - 1];
+
+  if (uStart >= totalLength || uEnd <= 0 || uStart >= uEnd) {
+    return [];
+  }
+
+  const s0 = Math.max(0, uStart);
+  const s1 = Math.min(totalLength, uEnd);
+
+  // 1. Locate start segment
+  let startSeg = 0;
+  while (startSeg < K - 1 && cumDist[startSeg + 1] < s0) {
+    startSeg++;
+  }
+  const seg0Len = cumDist[startSeg + 1] - cumDist[startSeg];
+  const t0 = seg0Len > 1e-6 ? (s0 - cumDist[startSeg]) / seg0Len : 0;
+  const startPt: Point2D = {
+    x: vertices[startSeg].x + (vertices[startSeg + 1].x - vertices[startSeg].x) * t0,
+    y: vertices[startSeg].y + (vertices[startSeg + 1].y - vertices[startSeg].y) * t0,
+  };
+
+  // 2. Locate end segment
+  let endSeg = startSeg;
+  while (endSeg < K - 1 && cumDist[endSeg + 1] < s1) {
+    endSeg++;
+  }
+  const seg1Len = cumDist[endSeg + 1] - cumDist[endSeg];
+  const t1 = seg1Len > 1e-6 ? (s1 - cumDist[endSeg]) / seg1Len : 0;
+  const endPt: Point2D = {
+    x: vertices[endSeg].x + (vertices[endSeg + 1].x - vertices[endSeg].x) * t1,
+    y: vertices[endSeg].y + (vertices[endSeg + 1].y - vertices[endSeg].y) * t1,
+  };
+
+  const result: Point2D[] = [startPt];
+
+  // 3. Add all intermediate polyline vertices strictly between s0 and s1
+  for (let j = startSeg + 1; j <= endSeg; j++) {
+    const d = cumDist[j];
+    if (d > s0 + 0.05 && d < s1 - 0.05) {
+      result.push({ x: vertices[j].x, y: vertices[j].y });
+    }
+  }
+
+  // 4. Add end point if not duplicate of last point
+  const last = result[result.length - 1];
+  const dLast = Math.hypot(endPt.x - last.x, endPt.y - last.y);
+  if (dLast > 0.05) {
+    result.push(endPt);
+  } else if (result.length === 1) {
+    result.push({ x: endPt.x, y: endPt.y });
+  }
+
+  return result;
+}
+
+/**
  * Computes arrow render data (SVG path and arrowhead polygon) for a given elapsed time in ms.
- * Phase 1 (0 to straightenDurationMs): Bent/L-shaped arrow smoothly straightens into exit direction.
- * Phase 2 (straightenDurationMs to totalDurationMs): Straight arrow smoothly translates off board.
+ * True Snake-like Movement:
+ * - Preserves original multi-turn geometry (L, U, S, Z, zigzag).
+ * - Arrowhead moves forward along its exit trajectory.
+ * - Entire body follows behind the head along the exact track of the arrow.
+ * - Every horizontal and vertical turn is followed smoothly and sequentially.
+ * - Constant path thickness, rounded corners, and constant arc length.
+ * - Returns null only after the entire arrow body has exited the board.
  */
 export function getArrowRenderData(
   track: ArrowTrack,
@@ -198,15 +257,11 @@ export function getArrowRenderData(
     headAnchor,
     bodyVertices,
     arrowHeadSize,
-    isBent,
     totalLength,
-    straightenDurationMs,
-    exitDurationMs,
     totalDurationMs,
     exitDistance,
-    segmentLengths,
-    segmentDeltaThetas,
-    backwardAngle,
+    guideVertices,
+    cumulativeDistances,
   } = track;
 
   // Completely finished and off-screen
@@ -218,55 +273,6 @@ export function getArrowRenderData(
   const perpX = -dy;
   const perpY = dx;
 
-  // PHASE 1: Straightening
-  if (elapsedMs < straightenDurationMs && isBent) {
-    const p1 = Math.max(0, Math.min(1, elapsedMs / straightenDurationMs));
-    // Smooth ease-out cubic
-    const ease1 = 1 - Math.pow(1 - p1, 3);
-
-    // Unbend segments backwards from head anchor
-    const pointsFromHead: Point2D[] = [{ ...headAnchor }];
-    let currentPoint = { ...headAnchor };
-
-    for (let i = 0; i < segmentLengths.length; i++) {
-      const len = segmentLengths[i];
-      const dTheta = segmentDeltaThetas[i];
-      const currentAngle = backwardAngle + (1 - ease1) * dTheta;
-      const nextPoint: Point2D = {
-        x: currentPoint.x + Math.cos(currentAngle) * len,
-        y: currentPoint.y + Math.sin(currentAngle) * len,
-      };
-      pointsFromHead.push(nextPoint);
-      currentPoint = nextPoint;
-    }
-
-    // Reverse to get points in order: tail -> intermediate -> head
-    const orderedPoints = [...pointsFromHead].reverse();
-
-    let pathD = `M ${orderedPoints[0].x.toFixed(1)} ${orderedPoints[0].y.toFixed(1)}`;
-    for (let i = 1; i < orderedPoints.length; i++) {
-      pathD += ` L ${orderedPoints[i].x.toFixed(1)} ${orderedPoints[i].y.toFixed(1)}`;
-    }
-
-    // Head is anchored at headAnchor during Phase 1; direction stays locked to exit direction
-    const tipX = headAnchor.x + dx * arrowHeadSize;
-    const tipY = headAnchor.y + dy * arrowHeadSize;
-    const baseLeftX = headAnchor.x + perpX * (arrowHeadSize * 0.7);
-    const baseLeftY = headAnchor.y + perpY * (arrowHeadSize * 0.7);
-    const baseRightX = headAnchor.x - perpX * (arrowHeadSize * 0.7);
-    const baseRightY = headAnchor.y - perpY * (arrowHeadSize * 0.7);
-
-    const arrowHeadPoints = `${tipX.toFixed(1)},${tipY.toFixed(1)} ${baseLeftX.toFixed(1)},${baseLeftY.toFixed(1)} ${baseRightX.toFixed(1)},${baseRightY.toFixed(1)}`;
-
-    return {
-      pathD,
-      arrowHeadPoints,
-      tip: { x: tipX, y: tipY },
-      tangent: { x: dx, y: dy },
-      isCompletelyExited: false,
-    };
-  }
-
   // Resting state (elapsedMs <= 0 or not yet escaping)
   if (elapsedMs <= 0) {
     let pathD = `M ${bodyVertices[0].x.toFixed(1)} ${bodyVertices[0].y.toFixed(1)}`;
@@ -276,10 +282,10 @@ export function getArrowRenderData(
 
     const tipX = headAnchor.x + dx * arrowHeadSize;
     const tipY = headAnchor.y + dy * arrowHeadSize;
-    const baseLeftX = headAnchor.x + perpX * (arrowHeadSize * 0.7);
-    const baseLeftY = headAnchor.y + perpY * (arrowHeadSize * 0.7);
-    const baseRightX = headAnchor.x - perpX * (arrowHeadSize * 0.7);
-    const baseRightY = headAnchor.y - perpY * (arrowHeadSize * 0.7);
+    const baseLeftX = headAnchor.x + perpX * (arrowHeadSize * 0.65);
+    const baseLeftY = headAnchor.y + perpY * (arrowHeadSize * 0.65);
+    const baseRightX = headAnchor.x - perpX * (arrowHeadSize * 0.65);
+    const baseRightY = headAnchor.y - perpY * (arrowHeadSize * 0.65);
 
     const arrowHeadPoints = `${tipX.toFixed(1)},${tipY.toFixed(1)} ${baseLeftX.toFixed(1)},${baseLeftY.toFixed(1)} ${baseRightX.toFixed(1)},${baseRightY.toFixed(1)}`;
 
@@ -292,26 +298,45 @@ export function getArrowRenderData(
     };
   }
 
-  // PHASE 2: Translation Exit (smooth forward slide of the straightened arrow)
-  const p2 = Math.max(0, Math.min(1, (elapsedMs - straightenDurationMs) / exitDurationMs));
-  // Smooth acceleration curve: t * (0.65 + 0.35 * t)
-  const ease2 = p2 * (0.65 + 0.35 * p2);
-  const offset = ease2 * exitDistance;
+  // Snake traversal along the guide polyline:
+  const p = Math.max(0, Math.min(1, elapsedMs / totalDurationMs));
+  // Smooth quadratic ease-in for natural forward slithering acceleration
+  const ease = p * (0.35 + 0.65 * p);
+  const distanceTraveled = ease * exitDistance;
 
-  // Head and tail translate together as one rigid straight line
-  const headX = headAnchor.x + dx * offset;
-  const headY = headAnchor.y + dy * offset;
-  const tailX = headAnchor.x + dx * (offset - totalLength);
-  const tailY = headAnchor.y + dy * (offset - totalLength);
+  // Slicing window:
+  // Tail is at distanceTraveled
+  // Head is at totalLength + distanceTraveled (preserving constant body length totalLength)
+  const uStart = distanceTraveled;
+  const uEnd = totalLength + distanceTraveled;
 
-  const pathD = `M ${tailX.toFixed(1)} ${tailY.toFixed(1)} L ${headX.toFixed(1)} ${headY.toFixed(1)}`;
+  const slicePoints = slicePolylineByArcLength(
+    guideVertices,
+    cumulativeDistances,
+    uStart,
+    uEnd
+  );
 
-  const tipX = headX + dx * arrowHeadSize;
-  const tipY = headY + dy * arrowHeadSize;
-  const baseLeftX = headX + perpX * (arrowHeadSize * 0.7);
-  const baseLeftY = headY + perpY * (arrowHeadSize * 0.7);
-  const baseRightX = headX - perpX * (arrowHeadSize * 0.7);
-  const baseRightY = headY - perpY * (arrowHeadSize * 0.7);
+  // If the entire arrow body has traversed past the guide polyline, exit is complete
+  if (slicePoints.length < 2) {
+    return null;
+  }
+
+  // Build SVG path
+  let pathD = `M ${slicePoints[0].x.toFixed(1)} ${slicePoints[0].y.toFixed(1)}`;
+  for (let i = 1; i < slicePoints.length; i++) {
+    pathD += ` L ${slicePoints[i].x.toFixed(1)} ${slicePoints[i].y.toFixed(1)}`;
+  }
+
+  // Arrowhead is anchored to the front tip of the moving snake
+  const headPoint = slicePoints[slicePoints.length - 1];
+
+  const tipX = headPoint.x + dx * arrowHeadSize;
+  const tipY = headPoint.y + dy * arrowHeadSize;
+  const baseLeftX = headPoint.x + perpX * (arrowHeadSize * 0.65);
+  const baseLeftY = headPoint.y + perpY * (arrowHeadSize * 0.65);
+  const baseRightX = headPoint.x - perpX * (arrowHeadSize * 0.65);
+  const baseRightY = headPoint.y - perpY * (arrowHeadSize * 0.65);
 
   const arrowHeadPoints = `${tipX.toFixed(1)},${tipY.toFixed(1)} ${baseLeftX.toFixed(1)},${baseLeftY.toFixed(1)} ${baseRightX.toFixed(1)},${baseRightY.toFixed(1)}`;
 
@@ -337,7 +362,7 @@ export function getSlicedArrowRenderData(
 }
 
 /**
- * Backward compatibility helper for testing sampling along track.
+ * Samples a point and forward tangent along the guide trajectory at distance s from headAnchor.
  */
 export function getPointAndTangentAtDistance(
   track: ArrowTrack,

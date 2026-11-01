@@ -42,8 +42,6 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
     } catch {}
   }, []);
 
-  const earnedCoins = stars === 3 ? 50 : stars === 2 ? 30 : 20;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs select-none animate-in fade-in duration-200">
       <div className="w-full max-w-[310px] rounded-3xl p-6 bg-white border border-slate-200 shadow-2xl flex flex-col items-center text-center relative animate-in zoom-in-95 duration-150">
@@ -100,18 +98,8 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
           </div>
         </div>
 
-        {/* Gold Coin Reward Pill matching Reference Screen 6 */}
-        <div className="flex items-center gap-2 my-2 px-4 py-1.5 rounded-full bg-amber-50 border border-amber-200">
-          <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-black shadow-xs">
-            ★
-          </div>
-          <span className="font-black text-amber-800 text-base">
-            +{earnedCoins}
-          </span>
-        </div>
-
         {/* Tag: New High Score! matching Reference Screen 6 */}
-        <div className="px-3 py-0.5 rounded-full bg-blue-50 text-[#0077FE] text-[11px] font-bold border border-blue-200 mb-5">
+        <div className="px-3 py-0.5 rounded-full bg-blue-50 text-[#0077FE] text-[11px] font-bold border border-blue-200 mt-2 mb-5">
           New High Score!
         </div>
 

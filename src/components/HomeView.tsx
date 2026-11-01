@@ -103,9 +103,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </span>
         </div>
 
-        {/* Action Buttons Column */}
-        <div className="w-full max-w-[260px] flex flex-col items-center gap-3.5 mb-6">
-          {/* 1. Solid Blue Play Button */}
+        {/* Action Button: Single Solid Blue Play Button with Level number below */}
+        <div className="w-full max-w-[260px] flex flex-col items-center gap-3 mb-6">
+          {/* Primary Solid Blue Play Button */}
           <button
             type="button"
             data-start="true"
@@ -121,21 +121,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span>Play</span>
           </button>
 
-          {/* 2. Outlined White Continue Button */}
-          <button
-            type="button"
-            aria-label="Continue game"
-            onClick={() => {
-              sound.playButton(settings.soundEnabled);
-              triggerHaptic('light', settings.hapticsEnabled);
-              onPlay(currentLevel);
-            }}
-            className="w-full py-3.5 px-6 rounded-full bg-white border-2 border-[#0077FE] hover:bg-blue-50/50 active:scale-95 text-[#0077FE] font-extrabold text-base shadow-xs transition-all cursor-pointer"
-          >
-            Continue
-          </button>
-
-          {/* 3. Level text underneath */}
+          {/* Level text underneath (tap to open level select) */}
           <button
             type="button"
             onClick={() => {

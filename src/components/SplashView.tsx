@@ -18,12 +18,12 @@ export const SplashView: React.FC<SplashViewProps> = ({ onFinish, autostart }) =
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
-          setTimeout(onFinish, 150);
+          setTimeout(onFinish, 80);
           return 100;
         }
-        return prev + 12;
+        return prev + 20;
       });
-    }, 45);
+    }, 35);
 
     return () => clearInterval(interval);
   }, [autostart, onFinish]);

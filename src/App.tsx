@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { LevelData, SavedProgress, UserSettings } from './game/types';
-import { getLevelById, ALL_LEVELS, TOTAL_LEVELS_COUNT } from './game/levels';
+import { getLevelById, ALL_LEVELS, TOTAL_LEVELS_COUNT, cloneLevel } from './game/levels';
 import { generateSolvableLevel } from './game/levelGenerator';
 import {
   loadProgress,
@@ -33,14 +33,18 @@ export default function App() {
   const [settings, setSettings] = useState<UserSettings>(() => loadSettings());
   const [progress, setProgress] = useState<SavedProgress>(() => loadProgress());
 
-  // Active level & gameplay state
+  // Active level & gameplay session state
   const [activeLevelId, setActiveLevelId] = useState<number>(() => {
     return progress.highestUnlockedLevel || 1;
   });
+  const [gameSessionId, setGameSessionId] = useState<number>(0);
   const [isDailyActive, setIsDailyActive] = useState<boolean>(false);
   const [hearts, setHearts] = useState<number>(() => {
     return typeof progress.hearts === 'number' ? Math.max(0, Math.min(3, progress.hearts)) : 3;
   });
+
+  // Guard to prevent duplicate rapid restarts or overlapping operations
+  const isRestartingRef = useRef<boolean>(false);
 
   // Modals & Screens
   const [isPaused, setIsPaused] = useState(false);
@@ -103,20 +107,20 @@ export default function App() {
     return { autostart, level };
   }, []);
 
-  // Compute daily puzzle deterministically from current date
-  const dailyLevelData = useMemo<LevelData>(() => {
+  // Compute daily puzzle lazily only when playing daily challenge
+  const getDailyLevel = useCallback((): LevelData => {
     const today = new Date();
     const dateNum = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
     return generateSolvableLevel(999000 + (dateNum % 500), 5, 5, 8, 1, 'medium');
   }, []);
 
-  // Active level data
+  // Active level data (always fresh deep copy)
   const currentLevelData = useMemo<LevelData>(() => {
     if (isDailyActive) {
-      return dailyLevelData;
+      return cloneLevel(getDailyLevel());
     }
     return getLevelById(activeLevelId);
-  }, [activeLevelId, dailyLevelData, isDailyActive]);
+  }, [activeLevelId, getDailyLevel, isDailyActive, gameSessionId]);
 
   // Handle autostart on mount
   useEffect(() => {
@@ -124,6 +128,7 @@ export default function App() {
       const targetLevel = queryParams.level || progress.highestUnlockedLevel || 1;
       setActiveLevelId(targetLevel);
       setHearts((h) => (h > 0 ? h : 3));
+      setGameSessionId((prev) => prev + 1);
       setScreen('playing');
       document.body.dataset.state = 'playing';
     }
@@ -157,9 +162,48 @@ export default function App() {
     return () => clearInterval(interval);
   }, [hearts, addToast]);
 
-  // Start playing a level
+  // Centralized, rock-solid restart function for Replay & Restart Level
+  const restartCurrentLevel = useCallback(() => {
+    if (isRestartingRef.current) return;
+    isRestartingRef.current = true;
+    setTimeout(() => {
+      isRestartingRef.current = false;
+    }, 250);
+
+    // Close all game modals
+    setIsPaused(false);
+    setCompletedResult(null);
+    setIsGameOverOpen(false);
+    setIsLevelSelectOpen(false);
+    setIsSettingsOpen(false);
+    setIsHowToPlayOpen(false);
+    setIsDailyOpen(false);
+    setIsDailyRewardsOpen(false);
+    setIsShopOpen(false);
+    setRewardedAdConfig(null);
+
+    // If hearts are 0, prompt game over refill instead of continuing without lives
+    if (hearts <= 0) {
+      setIsGameOverOpen(true);
+      addToast('No lives remaining! Watch an ad or refill.', 'warning');
+      return;
+    }
+
+    // Increment game session ID to guarantee a completely new GameView instance
+    setGameSessionId((prev) => prev + 1);
+    setScreen('playing');
+    document.body.dataset.state = 'playing';
+  }, [addToast, hearts]);
+
+  // Start playing a specific level
   const handleStartLevel = useCallback(
     (lvlId: number) => {
+      if (isRestartingRef.current) return;
+      isRestartingRef.current = true;
+      setTimeout(() => {
+        isRestartingRef.current = false;
+      }, 250);
+
       if (hearts <= 0) {
         setIsGameOverOpen(true);
         addToast('No lives remaining! Watch an ad or refill.', 'warning');
@@ -171,6 +215,15 @@ export default function App() {
       setIsGameOverOpen(false);
       setCompletedResult(null);
       setIsLevelSelectOpen(false);
+      setIsSettingsOpen(false);
+      setIsHowToPlayOpen(false);
+      setIsDailyOpen(false);
+      setIsDailyRewardsOpen(false);
+      setIsShopOpen(false);
+      setRewardedAdConfig(null);
+
+      // Trigger fresh instance
+      setGameSessionId((prev) => prev + 1);
       setScreen('playing');
       document.body.dataset.state = 'playing';
     },
@@ -179,6 +232,12 @@ export default function App() {
 
   // Start daily challenge puzzle
   const handleStartDaily = useCallback(() => {
+    if (isRestartingRef.current) return;
+    isRestartingRef.current = true;
+    setTimeout(() => {
+      isRestartingRef.current = false;
+    }, 250);
+
     if (hearts <= 0) {
       setIsGameOverOpen(true);
       addToast('No lives remaining! Watch an ad or refill.', 'warning');
@@ -189,9 +248,27 @@ export default function App() {
     setIsPaused(false);
     setIsGameOverOpen(false);
     setCompletedResult(null);
+    setIsLevelSelectOpen(false);
+    setIsSettingsOpen(false);
+    setIsHowToPlayOpen(false);
+    setIsDailyRewardsOpen(false);
+    setIsShopOpen(false);
+    setRewardedAdConfig(null);
+
+    setGameSessionId((prev) => prev + 1);
     setScreen('playing');
     document.body.dataset.state = 'playing';
   }, [hearts, addToast]);
+
+  // Resume active game session from Pause Screen
+  const handleResume = useCallback(() => {
+    // Only resume if level is still active and not completed
+    if (completedResult !== null || screen !== 'playing') {
+      setIsPaused(false);
+      return;
+    }
+    setIsPaused(false);
+  }, [completedResult, screen]);
 
   // Handle heart lost during play
   const handleHeartLost = useCallback((remainingHearts: number) => {
@@ -218,8 +295,6 @@ export default function App() {
     (stars: number, moves: number, timeSeconds: number) => {
       setCompletedResult({ stars, moves, timeSeconds });
 
-      const earnedCoins = stars === 3 ? 30 : stars === 2 ? 20 : 10;
-
       if (isDailyActive) {
         const todayStr = new Date().toISOString().split('T')[0];
         setProgress((prev) => {
@@ -236,7 +311,7 @@ export default function App() {
         return;
       }
 
-      // Update regular level progress & coins
+      // Update regular level progress
       setProgress((prev) => {
         const existing = prev.levels[activeLevelId];
         const prevStars = existing?.stars || 0;
@@ -250,7 +325,6 @@ export default function App() {
 
         const nextProgress: SavedProgress = {
           ...prev,
-          coins: (prev.coins ?? 100) + earnedCoins,
           highestUnlockedLevel: nextHighest,
           totalStars: prev.totalStars + starDiff,
           levels: {
@@ -271,21 +345,25 @@ export default function App() {
         return nextProgress;
       });
 
-      addToast(`Level Cleared! +${earnedCoins} Coins`, 'success');
+      addToast('Level Cleared!', 'success');
     },
     [activeLevelId, addToast, isDailyActive]
   );
 
   // Advance to next level
   const handleNextLevel = useCallback(() => {
+    setCompletedResult(null);
+    if (isDailyActive) {
+      handleReturnHome();
+      return;
+    }
     const nextId = activeLevelId + 1;
     if (nextId <= TOTAL_LEVELS_COUNT) {
       handleStartLevel(nextId);
     } else {
-      setScreen('home');
-      document.body.dataset.state = 'title';
+      handleReturnHome();
     }
-  }, [activeLevelId, handleStartLevel]);
+  }, [activeLevelId, handleStartLevel, isDailyActive]);
 
   // Update settings
   const handleUpdateSettings = useCallback((partial: Partial<UserSettings>) => {
@@ -302,6 +380,7 @@ export default function App() {
     setProgress(fresh);
     setActiveLevelId(1);
     setHearts(3);
+    setGameSessionId((prev) => prev + 1);
     setIsSettingsOpen(false);
     addToast('Progress reset successfully', 'info');
   }, [addToast]);
@@ -311,6 +390,13 @@ export default function App() {
     setIsPaused(false);
     setIsGameOverOpen(false);
     setCompletedResult(null);
+    setIsLevelSelectOpen(false);
+    setIsSettingsOpen(false);
+    setIsHowToPlayOpen(false);
+    setIsDailyOpen(false);
+    setIsDailyRewardsOpen(false);
+    setIsShopOpen(false);
+    setRewardedAdConfig(null);
     setScreen('home');
     document.body.dataset.state = 'title';
   }, []);
@@ -351,7 +437,6 @@ export default function App() {
     [addToast, progress.coins]
   );
 
-  // Refill hearts with 100 coins from GameOver
   // Refill hearts with 100 coins from GameOver
   const handleRefillHeartsWithCoins = useCallback(() => {
     if ((progress.coins ?? 0) < 100) {
@@ -446,7 +531,7 @@ export default function App() {
       {/* Toast Alert Layer */}
       <NetworkStatusToast toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Safe Area Viewport Container (optimized for mobile phones and responsive desktop) */}
+      {/* Safe Area Viewport Container */}
       <div
         className={`w-full h-full max-w-md mx-auto relative flex flex-col overflow-hidden shadow-2xl ${
           settings.theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'
@@ -482,10 +567,10 @@ export default function App() {
           />
         )}
 
-        {/* Screen 3: Gameplay View */}
+        {/* Screen 3: Gameplay View (fresh session key guarantees zero stale state on Replay/Restart) */}
         {screen === 'playing' && (
           <GameView
-            key={`game-${currentLevelData.id}-${isDailyActive ? 'daily' : 'reg'}`}
+            key={`game-${currentLevelData.id}-${isDailyActive ? 'daily' : 'reg'}-session-${gameSessionId}`}
             level={currentLevelData}
             settings={settings}
             theme={settings.theme}
@@ -493,6 +578,7 @@ export default function App() {
             hintsRemaining={progress.hintsCount ?? 3}
             bombsRemaining={progress.bombsCount ?? 1}
             undosRemaining={progress.undosCount ?? 3}
+            isPaused={isPaused}
             onHeartLost={handleHeartLost}
             onUseHint={() => {
               setProgress((prev) => {
@@ -524,7 +610,12 @@ export default function App() {
                 return next;
               });
             }}
-            onPause={() => setIsPaused(true)}
+            onPause={() => {
+              if (!completedResult && !isGameOverOpen) {
+                setIsPaused(true);
+              }
+            }}
+            onRestart={restartCurrentLevel}
             onLevelComplete={handleLevelComplete}
             onGameOver={handleGameOver}
             onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
@@ -542,11 +633,8 @@ export default function App() {
             moves={0}
             settings={settings}
             theme={settings.theme}
-            onResume={() => setIsPaused(false)}
-            onRestart={() => {
-              setIsPaused(false);
-              handleStartLevel(activeLevelId);
-            }}
+            onResume={handleResume}
+            onRestart={restartCurrentLevel}
             onHome={handleReturnHome}
             onOpenHowToPlay={() => setIsHowToPlayOpen(true)}
             onToggleSound={() =>
@@ -575,10 +663,7 @@ export default function App() {
             soundEnabled={settings.soundEnabled}
             hapticsEnabled={settings.hapticsEnabled}
             onNextLevel={handleNextLevel}
-            onReplay={() => {
-              setCompletedResult(null);
-              handleStartLevel(activeLevelId);
-            }}
+            onReplay={restartCurrentLevel}
             onOpenLevelSelect={() => {
               setCompletedResult(null);
               setIsLevelSelectOpen(true);
@@ -598,10 +683,7 @@ export default function App() {
               setRewardedAdConfig({ rewardType: 'extra_life' });
             }}
             onRefillWithCoins={handleRefillHeartsWithCoins}
-            onRestart={() => {
-              setIsGameOverOpen(false);
-              handleStartLevel(activeLevelId);
-            }}
+            onRestart={restartCurrentLevel}
             onHome={handleReturnHome}
           />
         )}

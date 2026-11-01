@@ -24,9 +24,18 @@ class AdMobService {
   private isRewardClaimed: boolean = false;
 
   constructor() {
-    // Preload test ad on startup
+    // Preload test ad non-blockingly during browser idle time after Home Screen is interactive
     if (typeof window !== 'undefined') {
-      setTimeout(() => this.preloadAd(), 1000);
+      const schedulePreload = () => {
+        if ('requestIdleCallback' in window) {
+          (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(() => {
+            this.preloadAd();
+          });
+        } else {
+          setTimeout(() => this.preloadAd(), 2500);
+        }
+      };
+      setTimeout(schedulePreload, 2000);
     }
   }
 

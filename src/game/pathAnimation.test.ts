@@ -5,17 +5,17 @@ import {
   getArrowRenderData,
   getSlicedArrowRenderData,
   getPointAndTangentAtDistance,
+  slicePolylineByArcLength,
 } from './pathAnimation';
 import { Arrow } from './types';
 
-test('Straight arrow track recognizes isBent=false and transitions directly to exit translation', () => {
+test('Straight arrow track creates linear trajectory and exits off-board', () => {
   const straight: Arrow = { id: 's1', x: 2, y: 2, direction: 'up' };
   const cellSize = 60;
   const track = buildArrowTrack(straight, cellSize, 5, 5);
 
   assert.equal(track.direction, 'up');
   assert.equal(track.isBent, false);
-  assert.equal(track.straightenDurationMs, 0);
   assert.ok(track.totalDurationMs > 0);
 
   // At rest (elapsed = 0), render data matches initial position pointing up
@@ -24,18 +24,19 @@ test('Straight arrow track recognizes isBent=false and transitions directly to e
   assert.equal(restData.tangent.x, 0);
   assert.equal(restData.tangent.y, -1);
 
-  // Mid-exit (e.g. 50% elapsed), arrow translates along (0, -1)
+  // Mid-exit (e.g. 50% elapsed), arrow translates upward along (0, -1)
   const midData = getArrowRenderData(track, track.totalDurationMs * 0.5);
   assert.ok(midData !== null);
   assert.equal(midData.tangent.x, 0);
   assert.equal(midData.tangent.y, -1);
+  assert.ok(midData.tip.y < restData.tip.y, 'Arrow should move upward');
 
   // At completion (elapsed >= totalDurationMs), returns null (exited completely)
   const exitData = getArrowRenderData(track, track.totalDurationMs);
   assert.equal(exitData, null);
 });
 
-test('L-shaped arrow smoothly straightens in Phase 1 before translating off-board in Phase 2', () => {
+test('L-shaped arrow follows snake-like path preserving corner geometry without straightening', () => {
   // L-shaped arrow: tail at (1, 3), corner at (2, 3), head at (2, 1) pointing UP
   const lArrow: Arrow = {
     id: 'l1',
@@ -53,116 +54,45 @@ test('L-shaped arrow smoothly straightens in Phase 1 before translating off-boar
   const track = buildArrowTrack(lArrow, cellSize, 5, 5);
 
   assert.equal(track.isBent, true);
-  assert.ok(track.straightenDurationMs > 0);
+  assert.ok(track.totalDurationMs > 0);
 
   // 1. At rest (elapsed = 0):
   const restData = getArrowRenderData(track, 0);
   assert.ok(restData !== null);
   // Corner at x=150, y=210 is present in resting polyline
-  assert.ok(restData.pathD.includes('150.0 210.0'));
+  assert.ok(restData.pathD.includes('150.0 210.0'), 'Resting arrow must include corner at (150, 210)');
   assert.equal(restData.tangent.x, 0);
   assert.equal(restData.tangent.y, -1);
 
-  // 2. End of Phase 1 (straightening complete, elapsed = track.straightenDurationMs):
-  const straightData = getArrowRenderData(track, track.straightenDurationMs);
-  assert.ok(straightData !== null);
-  // Arrowhead tangent still strictly UP
-  assert.equal(straightData.tangent.x, 0);
-  assert.equal(straightData.tangent.y, -1);
-  // Head anchor position is unchanged during Phase 1
-  assert.equal(straightData.tip.x, track.headAnchor.x);
-  assert.equal(straightData.tip.y, track.headAnchor.y - track.arrowHeadSize);
-
-  // In straightened state, path is a straight vertical line:
-  // Head is at x=150, tail is collinear at x=150 behind head!
-  const straightPoints = straightData.pathD
-    .replace('M ', '')
-    .split(' L ')
-    .map((s) => s.split(' ').map(Number));
-  // All points share the same X coordinate (x = 150)
-  for (const [px] of straightPoints) {
-    assert.ok(Math.abs(px - track.headAnchor.x) < 0.2, `Expected collinear X ~150, got ${px}`);
-  }
-
-  // 3. Phase 2 (translating off-board):
-  const exitMidData = getArrowRenderData(
-    track,
-    track.straightenDurationMs + track.exitDurationMs * 0.5
+  // 2. Early in escape (e.g. 15% duration):
+  // Head has moved forward into the exit ray, tail is advancing towards the corner.
+  // The corner MUST STILL BE IN THE PATH! The arrow MUST NOT be straightened!
+  const earlyData = getArrowRenderData(track, track.totalDurationMs * 0.15);
+  assert.ok(earlyData !== null);
+  assert.ok(
+    earlyData.pathD.includes('150.0 210.0'),
+    'Early in snake escape, corner must remain in path without straightening'
   );
-  assert.ok(exitMidData !== null);
-  assert.equal(exitMidData.tangent.x, 0);
-  assert.equal(exitMidData.tangent.y, -1);
-  // Head has moved upward along Y
-  assert.ok(exitMidData.tip.y < straightData.tip.y, 'Arrow should translate upward');
+  // Tangent at arrowhead remains UP
+  assert.equal(earlyData.tangent.x, 0);
+  assert.equal(earlyData.tangent.y, -1);
+  // Head has advanced upward
+  assert.ok(earlyData.tip.y < restData.tip.y, 'Arrowhead must advance forward in exit direction');
+
+  // 3. Later in escape (e.g. 70% duration):
+  // Tail has passed the corner; now the entire remaining body is on the vertical escape ray
+  const lateData = getArrowRenderData(track, track.totalDurationMs * 0.7);
+  assert.ok(lateData !== null);
+  assert.ok(lateData.tip.y < earlyData.tip.y, 'Arrow must continue exiting off-board');
 
   // 4. Completed exit:
   const doneData = getArrowRenderData(track, track.totalDurationMs);
   assert.equal(doneData, null, 'Should return null when completely exited');
 });
 
-test('All four directions with bent arrows straighten into their respective exit directions', () => {
-  const cases: Array<{
-    dir: 'up' | 'down' | 'left' | 'right';
-    points: Array<{ x: number; y: number }>;
-    expectedTangent: { x: number; y: number };
-  }> = [
-    {
-      dir: 'up',
-      points: [{ x: 1, y: 3 }, { x: 2, y: 3 }, { x: 2, y: 1 }],
-      expectedTangent: { x: 0, y: -1 },
-    },
-    {
-      dir: 'down',
-      points: [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 3 }],
-      expectedTangent: { x: 0, y: 1 },
-    },
-    {
-      dir: 'left',
-      points: [{ x: 3, y: 1 }, { x: 3, y: 2 }, { x: 1, y: 2 }],
-      expectedTangent: { x: -1, y: 0 },
-    },
-    {
-      dir: 'right',
-      points: [{ x: 1, y: 1 }, { x: 1, y: 2 }, { x: 3, y: 2 }],
-      expectedTangent: { x: 1, y: 0 },
-    },
-  ];
-
-  const cellSize = 60;
-
-  for (const { dir, points, expectedTangent } of cases) {
-    const arrow: Arrow = {
-      id: `bent-${dir}`,
-      x: points[points.length - 1].x,
-      y: points[points.length - 1].y,
-      direction: dir,
-      points,
-    };
-
-    const track = buildArrowTrack(arrow, cellSize, 5, 5);
-    assert.equal(track.isBent, true, `Arrow ${dir} should be bent`);
-
-    // Rest check
-    const rest = getArrowRenderData(track, 0);
-    assert.ok(rest !== null);
-    assert.equal(rest.tangent.x, expectedTangent.x, `Rest tangent X for ${dir}`);
-    assert.equal(rest.tangent.y, expectedTangent.y, `Rest tangent Y for ${dir}`);
-
-    // Straightened check at Phase 1 end
-    const straight = getArrowRenderData(track, track.straightenDurationMs);
-    assert.ok(straight !== null);
-    assert.equal(straight.tangent.x, expectedTangent.x, `Straightened tangent X for ${dir}`);
-    assert.equal(straight.tangent.y, expectedTangent.y, `Straightened tangent Y for ${dir}`);
-
-    // Mid-exit check
-    const mid = getArrowRenderData(track, track.straightenDurationMs + 100);
-    assert.ok(mid !== null);
-    assert.equal(mid.tangent.x, expectedTangent.x, `Exit tangent X for ${dir}`);
-    assert.equal(mid.tangent.y, expectedTangent.y, `Exit tangent Y for ${dir}`);
-  }
-});
-
-test('Multi-segment U-shaped arrow straightens completely and exits', () => {
+test('U-shaped multi-turn arrow snakes through both corners sequentially', () => {
+  // U-shaped arrow with 2 90-degree corners:
+  // (1, 1) -> (1, 3) [corner 1] -> (3, 3) [corner 2] -> (3, 1) [head pointing UP]
   const uArrow: Arrow = {
     id: 'u1',
     x: 3,
@@ -180,19 +110,52 @@ test('Multi-segment U-shaped arrow straightens completely and exits', () => {
   const track = buildArrowTrack(uArrow, cellSize, 6, 6);
   assert.equal(track.isBent, true);
 
-  // At rest
+  // At rest: both corners (75, 175) and (175, 175) must exist
   const r0 = getArrowRenderData(track, 0);
   assert.ok(r0 !== null);
+  assert.ok(r0.pathD.includes('75.0 175.0'), 'Must contain first corner');
+  assert.ok(r0.pathD.includes('175.0 175.0'), 'Must contain second corner');
 
-  // At straightened state
-  const rStraight = getArrowRenderData(track, track.straightenDurationMs);
-  assert.ok(rStraight !== null);
-  assert.equal(rStraight.tangent.x, 0);
-  assert.equal(rStraight.tangent.y, -1);
+  // During early movement (10% duration): both corners must STILL be in the snake body!
+  const rEarly = getArrowRenderData(track, track.totalDurationMs * 0.1);
+  assert.ok(rEarly !== null);
+  assert.ok(rEarly.pathD.includes('75.0 175.0'), 'Early snake must retain first corner');
+  assert.ok(rEarly.pathD.includes('175.0 175.0'), 'Early snake must retain second corner');
 
   // At end of exit
   const rExit = getArrowRenderData(track, track.totalDurationMs);
-  assert.equal(rExit, null);
+  assert.equal(rExit, null, 'U-arrow must exit completely');
+});
+
+test('slicePolylineByArcLength maintains exact constant body length during traversal', () => {
+  const vertices = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },   // corner 1
+    { x: 100, y: 100 }, // corner 2
+    { x: 100, y: 500 }, // exit ray
+  ];
+  const cumDist = [0, 100, 200, 600];
+  const arrowLen = 200;
+
+  // Test across multiple sample travel distances
+  for (const s of [0, 25, 50, 100, 150, 250, 350]) {
+    const uStart = s;
+    const uEnd = s + arrowLen;
+    const pts = slicePolylineByArcLength(vertices, cumDist, uStart, uEnd);
+
+    assert.ok(pts.length >= 2, `Slice at s=${s} must have at least 2 points`);
+
+    // Calculate total length of sliced polyline
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) {
+      len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    }
+
+    assert.ok(
+      Math.abs(len - arrowLen) < 0.2,
+      `Sliced length at s=${s} must equal ${arrowLen}, got ${len}`
+    );
+  }
 });
 
 test('Compatibility helper getSlicedArrowRenderData and getPointAndTangentAtDistance work as expected', () => {
