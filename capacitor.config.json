@@ -1,0 +1,16 @@
+{
+  "appId": "com.arrowx.game",
+  "appName": "ARROW X",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "AdMob": {
+      "appId": "ca-app-pub-3940256099942544~3347511713",
+      "initializeForTesting": true
+    }
+  }
+}

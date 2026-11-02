@@ -1,4 +1,5 @@
 import { SavedProgress, UserSettings } from '../game/types';
+import { ECONOMY_CONFIG } from '../game/economy';
 
 const PROGRESS_STORAGE_KEY = 'arrow_escape_progress_v1';
 const SETTINGS_STORAGE_KEY = 'arrow_escape_settings_v1';
@@ -15,13 +16,13 @@ export const DEFAULT_PROGRESS: SavedProgress = {
   highestUnlockedLevel: 1,
   levels: {},
   totalStars: 0,
-  coins: 100, // Starting gift
-  hintsCount: 3,
-  bombsCount: 1,
-  undosCount: 3,
+  coins: ECONOMY_CONFIG.STARTING_BALANCES.COINS, // Starting gift: 100 Coins
+  hintsCount: ECONOMY_CONFIG.STARTING_BALANCES.HINTS,
+  bombsCount: ECONOMY_CONFIG.STARTING_BALANCES.BOMBS,
+  undosCount: ECONOMY_CONFIG.STARTING_BALANCES.UNDOS,
   dailyStreak: 0,
   dailyRewardsClaimed: [],
-  hearts: 3,
+  hearts: ECONOMY_CONFIG.STARTING_BALANCES.HEARTS,
   lastHeartLossTime: undefined,
 };
 
@@ -55,16 +56,19 @@ export function loadProgress(): SavedProgress {
       highestUnlockedLevel: Math.max(1, parsed.highestUnlockedLevel || 1),
       levels: parsed.levels || {},
       totalStars: parsed.totalStars || 0,
-      coins: typeof parsed.coins === 'number' ? parsed.coins : 100,
-      hintsCount: typeof parsed.hintsCount === 'number' ? parsed.hintsCount : 3,
-      bombsCount: typeof parsed.bombsCount === 'number' ? parsed.bombsCount : 1,
-      undosCount: typeof parsed.undosCount === 'number' ? parsed.undosCount : 3,
+      coins: Math.max(
+        0,
+        typeof parsed.coins === 'number' ? parsed.coins : ECONOMY_CONFIG.STARTING_BALANCES.COINS
+      ),
+      hintsCount: typeof parsed.hintsCount === 'number' ? parsed.hintsCount : ECONOMY_CONFIG.STARTING_BALANCES.HINTS,
+      bombsCount: typeof parsed.bombsCount === 'number' ? parsed.bombsCount : ECONOMY_CONFIG.STARTING_BALANCES.BOMBS,
+      undosCount: typeof parsed.undosCount === 'number' ? parsed.undosCount : ECONOMY_CONFIG.STARTING_BALANCES.UNDOS,
       dailyStreak: typeof parsed.dailyStreak === 'number' ? parsed.dailyStreak : 0,
       lastClaimDate: parsed.lastClaimDate,
       dailyRewardsClaimed: Array.isArray(parsed.dailyRewardsClaimed) ? parsed.dailyRewardsClaimed : [],
       dailyChallengeDate: parsed.dailyChallengeDate,
       dailyChallengeCompleted: parsed.dailyChallengeCompleted,
-      hearts: typeof parsed.hearts === 'number' ? Math.max(0, Math.min(3, parsed.hearts)) : 3,
+      hearts: typeof parsed.hearts === 'number' ? Math.max(0, Math.min(ECONOMY_CONFIG.STARTING_BALANCES.MAX_HEARTS, parsed.hearts)) : ECONOMY_CONFIG.STARTING_BALANCES.HEARTS,
       lastHeartLossTime: parsed.lastHeartLossTime,
     };
   } catch {

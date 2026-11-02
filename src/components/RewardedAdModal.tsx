@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, Tv, Play, AlertCircle } from 'lucide-react';
+import { Heart, Tv, AlertCircle } from 'lucide-react';
 import { admob, ADMOB_TEST_REWARDED_UNIT_ID, AdReward } from '../services/admobService';
 import { sound, triggerHaptic } from '../utils/audio';
+import { ECONOMY_CONFIG } from '../game/economy';
 
 interface RewardedAdModalProps {
   rewardType: 'extra_life' | 'coins' | 'hint';
@@ -23,23 +24,42 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({
   const [isRewarded, setIsRewarded] = useState<boolean>(false);
   const [showSkipWarning, setShowSkipWarning] = useState<boolean>(false);
   const [isError, setIsError] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const startAdPlayback = () => {
+  const rewardAmount =
+    rewardType === 'coins'
+      ? ECONOMY_CONFIG.REWARDS.REWARDED_AD_COINS
+      : ECONOMY_CONFIG.REWARDS.REWARDED_AD_LIVES;
+
+  const startAdPlayback = async () => {
     sound.playButton(soundEnabled);
     triggerHaptic('medium', hapticsEnabled);
-    setIsPlayingAd(true);
 
-    const started = admob.startAdSession(
-      rewardType,
-      rewardType === 'coins' ? 50 : 1,
-      (reward) => {
+    // If native Capacitor Android is active, present native Google Rewarded Ad
+    if (admob.isNative()) {
+      setIsPlayingAd(true);
+      const shown = await admob.showNativeRewardedAd(rewardType, rewardAmount, (reward) => {
         onRewardEarned(reward);
+      });
+      if (shown) {
+        onClose();
+        return;
       }
-    );
+      setIsError(true);
+      setErrorMessage(admob.getLastErrorMessage() || 'Ad failed to load. Please try again.');
+      return;
+    }
+
+    // Web / Test simulation
+    setIsPlayingAd(true);
+    const started = admob.startAdSession(rewardType, rewardAmount, (reward) => {
+      onRewardEarned(reward);
+    });
 
     if (!started) {
       setIsError(true);
+      setErrorMessage(admob.getLastErrorMessage() || 'Ad is currently unavailable.');
       return;
     }
 
@@ -84,23 +104,63 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-none animate-in fade-in duration-150">
       <div className="w-full max-w-[310px] rounded-3xl p-6 bg-white border border-slate-200 shadow-2xl flex flex-col items-center text-center text-slate-900 animate-in zoom-in-95 duration-150 relative">
-        {/* State A: Initial Screen matching Reference Screen 10 */}
-        {!isPlayingAd && (
+        {/* Error State: User-Friendly Message */}
+        {isError && (
+          <div className="w-full flex flex-col items-center py-4 animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mb-3">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-1">
+              Ad Unavailable
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mb-5 px-2">
+              {errorMessage || 'Test ad could not load. Please check your internet connection and try again.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setIsError(false);
+                setIsPlayingAd(false);
+                admob.preloadAd();
+                onClose();
+              }}
+              className="py-2.5 px-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        )}
+
+        {/* State A: Initial Screen */}
+        {!isPlayingAd && !isError && (
           <>
-            {/* Glowing Big Red Heart matching Reference Screen 10 */}
+            {/* Visual Icon: Coin vs Heart */}
             <div className="relative my-4 flex items-center justify-center">
-              <div className="absolute w-28 h-28 rounded-full bg-rose-100/70 blur-xl animate-pulse" />
-              <div className="relative transform hover:scale-105 transition-transform duration-300">
-                <Heart className="w-24 h-24 text-[#EF4444] fill-[#EF4444] drop-shadow-xl" />
-              </div>
+              {rewardType === 'coins' ? (
+                <>
+                  <div className="absolute w-28 h-28 rounded-full bg-amber-100/70 blur-xl animate-pulse" />
+                  <div className="relative transform hover:scale-105 transition-transform duration-300 w-24 h-24 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center shadow-xl text-white text-5xl font-black">
+                    ★
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute w-28 h-28 rounded-full bg-rose-100/70 blur-xl animate-pulse" />
+                  <div className="relative transform hover:scale-105 transition-transform duration-300">
+                    <Heart className="w-24 h-24 text-[#EF4444] fill-[#EF4444] drop-shadow-xl" />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Title & Subtitle */}
             <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">
-              Get 1 Extra Life!
+              {rewardType === 'coins' ? `Get ${rewardAmount} Coins!` : `Get ${rewardAmount} Lives!`}
             </h2>
             <p className="text-xs text-slate-500 font-medium mb-6 leading-relaxed max-w-[210px]">
-              Watch a rewarded ad and continue playing.
+              {rewardType === 'coins'
+                ? `Watch a rewarded ad to receive +${rewardAmount} coins.`
+                : `Watch a rewarded ad to refill ${rewardAmount} lives.`}
             </p>
 
             {/* Action Buttons matching Reference Screen 10 */}
@@ -140,7 +200,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({
             </div>
 
             <h3 className="text-lg font-black text-slate-900 mb-1">
-              Playing Google AdMob Ad
+              Playing Google AdMob Test Ad
             </h3>
             <p className="text-xs text-slate-400 mb-4 font-mono">
               Unit: {ADMOB_TEST_REWARDED_UNIT_ID.slice(-10)}
@@ -171,13 +231,19 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({
         {isRewarded && (
           <div className="w-full flex flex-col items-center py-6 animate-in zoom-in-95">
             <div className="w-20 h-20 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-3">
-              <Heart className="w-10 h-10 fill-rose-500 text-rose-500 animate-bounce" />
+              {rewardType === 'coins' ? (
+                <div className="w-12 h-12 rounded-full bg-amber-500 text-white flex items-center justify-center text-2xl font-black shadow-xs">
+                  ★
+                </div>
+              ) : (
+                <Heart className="w-10 h-10 fill-rose-500 text-rose-500 animate-bounce" />
+              )}
             </div>
             <h3 className="text-xl font-black text-slate-900 mb-1">
-              +1 Extra Life Earned!
+              {rewardType === 'coins' ? `+${rewardAmount} Coins Earned!` : `+${rewardAmount} Lives Earned!`}
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Resuming your puzzle...
+              {rewardType === 'coins' ? 'Coins added to your balance.' : 'Resuming your puzzle with full lives...'}
             </p>
           </div>
         )}
@@ -190,7 +256,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({
               Skip Ad Early?
             </h4>
             <p className="text-xs text-slate-500 mb-4 px-2">
-              If you leave now, you will not receive your extra life!
+              If you leave now, you will not receive your {rewardType === 'coins' ? `${rewardAmount} coins` : `${rewardAmount} lives`}!
             </p>
             <div className="flex gap-2 w-full">
               <button

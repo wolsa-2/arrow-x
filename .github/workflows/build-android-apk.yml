@@ -56,7 +56,7 @@ jobs:
       - name: Install Capacitor Android tooling
         run: npm install --legacy-peer-deps --no-save --no-audit --no-fund @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
 
-      - name: Configure Capacitor
+      - name: Configure Capacitor with Google AdMob
         run: |
           cat > capacitor.config.json <<'EOF'
           {
@@ -67,6 +67,12 @@ jobs:
             "android": {
               "allowMixedContent": false,
               "webContentsDebuggingEnabled": false
+            },
+            "plugins": {
+              "AdMob": {
+                "appId": "ca-app-pub-3940256099942544~3347511713",
+                "initializeForTesting": true
+              }
             }
           }
           EOF
@@ -75,7 +81,16 @@ jobs:
         run: npm run build
 
       - name: Generate Android project
-        run: npx cap add android
+        run: |
+          npx cap add android || true
+
+      - name: Inject Google AdMob App ID into AndroidManifest.xml
+        run: |
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" android/app/src/main/AndroidManifest.xml; then
+              sed -i '/<\/application>/i \        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>' android/app/src/main/AndroidManifest.xml
+            fi
+          fi
 
       - name: Sync web assets
         run: npx cap sync android

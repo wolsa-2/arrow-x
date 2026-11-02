@@ -9,6 +9,7 @@
 - **Minimum SDK**: Android 7.0 (API 24)
 - **Orientation**: Portrait (`portrait`)
 - **Theme Color**: `#FFFFFF`
+- **AdMob Android App ID**: `ca-app-pub-3940256099942544~3347511713`
 - **AdMob Rewarded Video Test Unit ID**: `ca-app-pub-3940256099942544/5224354917`
 
 ---

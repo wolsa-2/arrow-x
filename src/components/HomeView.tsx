@@ -52,7 +52,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {/* Left: Gold Coin Pill */}
         <button
           type="button"
-          aria-label={`Coins: ${progress.coins ?? 1250}. Open Shop`}
+          aria-label={`Coins: ${progress.coins ?? 100}. Open Shop`}
           onClick={() => {
             sound.playButton(settings.soundEnabled);
             triggerHaptic('light', settings.hapticsEnabled);
@@ -64,7 +64,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             ★
           </div>
           <span className="font-extrabold text-sm text-slate-800 tracking-tight">
-            {progress.coins ?? 1250}
+            {progress.coins ?? 100}
           </span>
         </button>
 

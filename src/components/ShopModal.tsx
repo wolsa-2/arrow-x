@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, Lightbulb, Undo2, Heart, Coins } from 'lucide-react';
 import { sound, triggerHaptic } from '../utils/audio';
+import { ECONOMY_CONFIG } from '../game/economy';
 
 interface ShopModalProps {
   coins: number;
@@ -53,7 +54,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
         {/* Shop Items List matching Reference Screen 9 */}
         <div className="flex-1 overflow-y-auto flex flex-col gap-3 py-1">
-          {/* Item 1: Hint */}
+          {/* Item 1: Hint - 50 Coins */}
           <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-200 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-[#EAF3FB] text-[#0077FE] flex items-center justify-center shrink-0">
@@ -64,11 +65,11 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                   Hint
                 </h3>
                 <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
-                  Show a solution hint
+                  Show a solution hint (+{ECONOMY_CONFIG.SHOP_GRANTS.HINT_COUNT})
                 </p>
                 <div className="flex items-center gap-1 mt-1 text-amber-500 font-extrabold text-xs">
                   <span>★</span>
-                  <span>100</span>
+                  <span>{ECONOMY_CONFIG.SHOP_PRICES.HINT}</span>
                 </div>
               </div>
             </div>
@@ -76,7 +77,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                const ok = onBuyItem('hints', 100);
+                const ok = onBuyItem('hints', ECONOMY_CONFIG.SHOP_PRICES.HINT);
                 if (ok) {
                   sound.playCoin(soundEnabled);
                   triggerHaptic('double', hapticsEnabled);
@@ -91,7 +92,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             </button>
           </div>
 
-          {/* Item 2: Undo */}
+          {/* Item 2: Undo - 100 Coins */}
           <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-200 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-[#EAF3FB] text-[#0077FE] flex items-center justify-center shrink-0">
@@ -102,11 +103,11 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                   Undo
                 </h3>
                 <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
-                  Undo your last move
+                  Undo your last move (+{ECONOMY_CONFIG.SHOP_GRANTS.UNDO_COUNT})
                 </p>
                 <div className="flex items-center gap-1 mt-1 text-amber-500 font-extrabold text-xs">
                   <span>★</span>
-                  <span>150</span>
+                  <span>{ECONOMY_CONFIG.SHOP_PRICES.UNDO}</span>
                 </div>
               </div>
             </div>
@@ -114,7 +115,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                const ok = onBuyItem('undos', 150);
+                const ok = onBuyItem('undos', ECONOMY_CONFIG.SHOP_PRICES.UNDO);
                 if (ok) {
                   sound.playCoin(soundEnabled);
                   triggerHaptic('double', hapticsEnabled);
@@ -129,8 +130,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             </button>
           </div>
 
-          {/* Item 3: Extra Life */}
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-200 transition-all">
+          {/* Item 3: Extra Life - 100 Coins */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-2xl hover:border-blue-200 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-[#EAF3FB] text-rose-500 flex items-center justify-center shrink-0">
                 <Heart className="w-6 h-6 fill-rose-500 text-rose-500" />
@@ -140,11 +141,11 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                   Extra Life
                 </h3>
                 <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
-                  Get 1 extra life
+                  Get 1 extra life (+{ECONOMY_CONFIG.SHOP_GRANTS.LIFE_COUNT})
                 </p>
                 <div className="flex items-center gap-1 mt-1 text-amber-500 font-extrabold text-xs">
                   <span>★</span>
-                  <span>200</span>
+                  <span>{ECONOMY_CONFIG.SHOP_PRICES.EXTRA_LIFE}</span>
                 </div>
               </div>
             </div>
@@ -152,7 +153,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                const ok = onBuyItem('hearts', 200);
+                const ok = onBuyItem('hearts', ECONOMY_CONFIG.SHOP_PRICES.EXTRA_LIFE);
                 if (ok) {
                   sound.playHeartRefill(soundEnabled);
                   triggerHaptic('double', hapticsEnabled);
@@ -167,7 +168,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             </button>
           </div>
 
-          {/* Item 4: Get More Coins (AdMob Sponsor Row) matching Reference Screen 9 */}
+          {/* Item 4: Get More Coins (Rewarded Ad: +50 Coins) matching Reference Screen 9 */}
           <button
             type="button"
             onClick={() => {
@@ -186,7 +187,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                   Get More Coins
                 </h3>
                 <p className="text-[11px] text-amber-700/80 font-semibold leading-tight mt-0.5">
-                  Watch rewarded ads or make a purchase
+                  Watch rewarded ad (+{ECONOMY_CONFIG.REWARDS.REWARDED_AD_COINS} Coins)
                 </p>
               </div>
             </div>

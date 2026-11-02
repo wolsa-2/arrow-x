@@ -2,6 +2,7 @@ import React from 'react';
 import confetti from 'canvas-confetti';
 import { ChevronLeft, Check, Heart } from 'lucide-react';
 import { sound, triggerHaptic } from '../utils/audio';
+import { ECONOMY_CONFIG } from '../game/economy';
 
 interface DailyRewardsModalProps {
   streak: number;
@@ -28,21 +29,22 @@ export const DailyRewardsModal: React.FC<DailyRewardsModalProps> = ({
   // Active day in 7-day cycle (0 to 6)
   const currentDayIndex = streak % 7;
 
-  // Reward schedule exactly matching Reference Screen 12
+  const dailyCoins = ECONOMY_CONFIG.REWARDS.DAILY_LOGIN_COINS;
+
+  // Reward schedule with standardized +25 Coins Daily Login Bonus
   const rewardSchedule = [
-    { day: 1, rewardText: '+50', coins: 50, isHeart: false },
-    { day: 2, rewardText: '+75', coins: 75, isHeart: false },
-    { day: 3, rewardText: '+100', coins: 100, isHeart: false },
-    { day: 4, rewardText: '+150', coins: 150, isHeart: false },
-    { day: 5, rewardText: '+200', coins: 200, isHeart: false },
-    { day: 6, rewardText: '+250', coins: 250, isHeart: false },
-    { day: 7, rewardText: '+1', coins: 300, isHeart: true },
+    { day: 1, rewardText: `+${dailyCoins}`, coins: dailyCoins, isHeart: false },
+    { day: 2, rewardText: `+${dailyCoins}`, coins: dailyCoins, isHeart: false },
+    { day: 3, rewardText: `+${dailyCoins}`, coins: dailyCoins, isHeart: false },
+    { day: 4, rewardText: `+${dailyCoins}`, coins: dailyCoins, isHeart: false },
+    { day: 5, rewardText: `+${dailyCoins}`, coins: dailyCoins, isHeart: false },
+    { day: 6, rewardText: `+${dailyCoins}`, coins: dailyCoins, isHeart: false },
+    { day: 7, rewardText: `+${dailyCoins}`, coins: dailyCoins, isHeart: false },
   ];
 
   const handleClaim = () => {
     if (isClaimedToday) return;
 
-    const reward = rewardSchedule[currentDayIndex];
     sound.playReward(soundEnabled);
     triggerHaptic('double', hapticsEnabled);
 
@@ -56,8 +58,8 @@ export const DailyRewardsModal: React.FC<DailyRewardsModalProps> = ({
     } catch {}
 
     onClaimDay(currentDayIndex, {
-      coins: reward.coins,
-      hints: reward.isHeart ? 1 : 0,
+      coins: dailyCoins,
+      hints: 0,
       bombs: 0,
       undos: 0,
     });

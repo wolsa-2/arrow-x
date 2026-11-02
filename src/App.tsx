@@ -11,6 +11,7 @@ import {
 } from './utils/storage';
 import { sound } from './utils/audio';
 import { admob, AdReward } from './services/admobService';
+import { ECONOMY_CONFIG } from './game/economy';
 
 import { SplashView } from './components/SplashView';
 import { HomeView } from './components/HomeView';
@@ -163,12 +164,25 @@ export default function App() {
   }, [hearts, addToast]);
 
   // Centralized, rock-solid restart function for Replay & Restart Level
+  // Requirement 5: Restarting or retrying any level must always restore exactly 3 lives
   const restartCurrentLevel = useCallback(() => {
     if (isRestartingRef.current) return;
     isRestartingRef.current = true;
     setTimeout(() => {
       isRestartingRef.current = false;
     }, 250);
+
+    // Always restore exactly 3 lives on restart/retry
+    setHearts(3);
+    setProgress((prev) => {
+      const next = {
+        ...prev,
+        hearts: 3,
+        lastHeartLossTime: undefined,
+      };
+      saveProgress(next);
+      return next;
+    });
 
     // Close all game modals
     setIsPaused(false);
@@ -182,20 +196,13 @@ export default function App() {
     setIsShopOpen(false);
     setRewardedAdConfig(null);
 
-    // If hearts are 0, prompt game over refill instead of continuing without lives
-    if (hearts <= 0) {
-      setIsGameOverOpen(true);
-      addToast('No lives remaining! Watch an ad or refill.', 'warning');
-      return;
-    }
-
     // Increment game session ID to guarantee a completely new GameView instance
     setGameSessionId((prev) => prev + 1);
     setScreen('playing');
     document.body.dataset.state = 'playing';
-  }, [addToast, hearts]);
+  }, []);
 
-  // Start playing a specific level
+  // Start playing a specific level (always ensures 3 lives on starting/retrying)
   const handleStartLevel = useCallback(
     (lvlId: number) => {
       if (isRestartingRef.current) return;
@@ -204,11 +211,18 @@ export default function App() {
         isRestartingRef.current = false;
       }, 250);
 
-      if (hearts <= 0) {
-        setIsGameOverOpen(true);
-        addToast('No lives remaining! Watch an ad or refill.', 'warning');
-        return;
-      }
+      // Restore 3 lives on starting or retrying
+      setHearts(3);
+      setProgress((prev) => {
+        const next = {
+          ...prev,
+          hearts: 3,
+          lastHeartLossTime: undefined,
+        };
+        saveProgress(next);
+        return next;
+      });
+
       setActiveLevelId(lvlId);
       setIsDailyActive(false);
       setIsPaused(false);
@@ -227,7 +241,7 @@ export default function App() {
       setScreen('playing');
       document.body.dataset.state = 'playing';
     },
-    [hearts, addToast]
+    []
   );
 
   // Start daily challenge puzzle
@@ -404,21 +418,32 @@ export default function App() {
   // Buy Shop Items
   const handleBuyShopItem = useCallback(
     (item: 'hints' | 'bomb' | 'undos' | 'hearts', cost: number): boolean => {
-      if ((progress.coins ?? 0) < cost) {
+      const currentCoins = progress.coins ?? ECONOMY_CONFIG.STARTING_BALANCES.COINS;
+      if (currentCoins < cost) {
         addToast('Not enough coins!', 'warning');
         return false;
       }
 
-      setProgress((prev) => {
-        const nextCoins = prev.coins - cost;
-        let nextHints = prev.hintsCount ?? 3;
-        let nextBombs = prev.bombsCount ?? 1;
-        let nextUndos = prev.undosCount ?? 3;
+      if (item === 'hearts' && hearts >= ECONOMY_CONFIG.STARTING_BALANCES.MAX_HEARTS) {
+        addToast('Lives are already full!', 'info');
+        return false;
+      }
 
-        if (item === 'hints') nextHints += 3;
+      const nextCoins = Math.max(0, currentCoins - cost);
+
+      setProgress((prev) => {
+        let nextHints = prev.hintsCount ?? ECONOMY_CONFIG.STARTING_BALANCES.HINTS;
+        let nextBombs = prev.bombsCount ?? ECONOMY_CONFIG.STARTING_BALANCES.BOMBS;
+        let nextUndos = prev.undosCount ?? ECONOMY_CONFIG.STARTING_BALANCES.UNDOS;
+        let nextHearts = prev.hearts ?? hearts;
+
+        if (item === 'hints') nextHints += ECONOMY_CONFIG.SHOP_GRANTS.HINT_COUNT;
         else if (item === 'bomb') nextBombs += 1;
-        else if (item === 'undos') nextUndos += 5;
-        else if (item === 'hearts') setHearts(3);
+        else if (item === 'undos') nextUndos += ECONOMY_CONFIG.SHOP_GRANTS.UNDO_COUNT;
+        else if (item === 'hearts') {
+          nextHearts = Math.min(ECONOMY_CONFIG.STARTING_BALANCES.MAX_HEARTS, nextHearts + ECONOMY_CONFIG.SHOP_GRANTS.LIFE_COUNT);
+          setHearts(nextHearts);
+        }
 
         const next: SavedProgress = {
           ...prev,
@@ -426,92 +451,100 @@ export default function App() {
           hintsCount: nextHints,
           bombsCount: nextBombs,
           undosCount: nextUndos,
+          hearts: nextHearts,
         };
         saveProgress(next);
         return next;
       });
 
-      addToast(`Purchased ${item}!`, 'success');
+      const itemName = item === 'hearts' ? 'Extra Life' : item.charAt(0).toUpperCase() + item.slice(1);
+      addToast(`Purchased ${itemName}!`, 'success');
       return true;
     },
-    [addToast, progress.coins]
+    [addToast, progress.coins, hearts]
   );
 
-  // Refill hearts with 100 coins from GameOver
+  // Refill 3 lives with 200 coins from GameOver
   const handleRefillHeartsWithCoins = useCallback(() => {
-    if ((progress.coins ?? 0) < 100) {
+    const cost = ECONOMY_CONFIG.GAME_OVER.REFILL_3_LIVES_COINS;
+    const currentCoins = progress.coins ?? ECONOMY_CONFIG.STARTING_BALANCES.COINS;
+    if (currentCoins < cost) {
       addToast('Not enough coins! Watch an ad to get +1 life.', 'warning');
       return;
     }
+    const nextCoins = Math.max(0, currentCoins - cost);
     setProgress((prev) => {
       const next = {
         ...prev,
-        coins: prev.coins - 100,
-        hearts: 3,
+        coins: nextCoins,
+        hearts: ECONOMY_CONFIG.STARTING_BALANCES.MAX_HEARTS,
         lastHeartLossTime: undefined,
       };
       saveProgress(next);
       return next;
     });
-    setHearts(3);
+    setHearts(ECONOMY_CONFIG.STARTING_BALANCES.MAX_HEARTS);
     setIsGameOverOpen(false);
     addToast('Lives Refilled to 3!', 'success');
   }, [addToast, progress.coins]);
 
-  // Claim Daily Streak Reward
+  // Claim Daily Streak Reward (+25 Coins)
   const handleClaimDailyReward = useCallback(
     (dayIndex: number, reward: { coins: number; hints: number; bombs: number; undos: number }) => {
       const todayStr = new Date().toISOString().split('T')[0];
+      const rewardCoins = ECONOMY_CONFIG.REWARDS.DAILY_LOGIN_COINS;
       setProgress((prev) => {
         const next: SavedProgress = {
           ...prev,
-          coins: (prev.coins ?? 100) + reward.coins,
-          hintsCount: (prev.hintsCount ?? 3) + reward.hints,
-          bombsCount: (prev.bombsCount ?? 1) + reward.bombs,
-          undosCount: (prev.undosCount ?? 3) + reward.undos,
+          coins: (prev.coins ?? ECONOMY_CONFIG.STARTING_BALANCES.COINS) + rewardCoins,
+          hintsCount: (prev.hintsCount ?? ECONOMY_CONFIG.STARTING_BALANCES.HINTS) + reward.hints,
+          bombsCount: (prev.bombsCount ?? ECONOMY_CONFIG.STARTING_BALANCES.BOMBS) + reward.bombs,
+          undosCount: (prev.undosCount ?? ECONOMY_CONFIG.STARTING_BALANCES.UNDOS) + reward.undos,
           dailyStreak: (prev.dailyStreak ?? 0) + 1,
           lastClaimDate: todayStr,
         };
         saveProgress(next);
         return next;
       });
-      addToast(`Claimed Day ${dayIndex + 1}: +${reward.coins} Coins!`, 'success');
+      addToast(`Claimed Day ${dayIndex + 1}: +${rewardCoins} Coins!`, 'success');
     },
     [addToast]
   );
 
-  // Rewarded Ad Grant Callback
+  // Rewarded Ad Grant Callback (Strictly validates reward amount from ECONOMY_CONFIG)
   const handleRewardEarned = useCallback(
     (reward: AdReward) => {
       if (reward.type === 'extra_life') {
-        // Restore strictly 1 life and resume
-        setHearts(1);
+        // Restore strictly 3 lives and resume
+        const nextHearts = ECONOMY_CONFIG.GAME_OVER.WATCH_AD_LIVES; // 3 lives
+        setHearts(nextHearts);
         setProgress((prev) => {
           const next = {
             ...prev,
-            hearts: 1,
+            hearts: nextHearts,
             lastHeartLossTime: undefined,
           };
           saveProgress(next);
           return next;
         });
         setIsGameOverOpen(false);
-        addToast('+1 Life Granted! Keep escaping!', 'success');
+        addToast('Lives Refilled to 3! Keep escaping!', 'success');
       } else if (reward.type === 'coins') {
+        const coinAmount = ECONOMY_CONFIG.REWARDS.REWARDED_AD_COINS; // 50 Coins
         setProgress((prev) => {
           const next = {
             ...prev,
-            coins: (prev.coins ?? 100) + reward.amount,
+            coins: (prev.coins ?? ECONOMY_CONFIG.STARTING_BALANCES.COINS) + coinAmount,
           };
           saveProgress(next);
           return next;
         });
-        addToast(`+${reward.amount} Coins Received!`, 'success');
+        addToast(`+${coinAmount} Coins Received!`, 'success');
       } else if (reward.type === 'hint') {
         setProgress((prev) => {
           const next = {
             ...prev,
-            hintsCount: (prev.hintsCount ?? 3) + 1,
+            hintsCount: (prev.hintsCount ?? ECONOMY_CONFIG.STARTING_BALANCES.HINTS) + 1,
           };
           saveProgress(next);
           return next;
@@ -519,7 +552,7 @@ export default function App() {
         addToast('+1 Free Hint Added!', 'success');
       }
     },
-    [addToast]
+    [addToast, hearts]
   );
 
   return (
