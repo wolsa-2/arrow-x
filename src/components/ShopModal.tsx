@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Lightbulb, Undo2, Heart, Coins } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lightbulb, Undo2, Coins } from 'lucide-react';
 import { sound, triggerHaptic } from '../utils/audio';
 import { ECONOMY_CONFIG } from '../game/economy';
 
@@ -27,7 +27,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/40 backdrop-blur-sm select-none animate-in fade-in duration-150">
       <div className="w-full max-w-sm rounded-3xl p-5 sm:p-6 bg-white border border-slate-200 shadow-2xl flex flex-col text-slate-900 max-h-[88vh] overflow-hidden">
         {/* Header matching Reference Screen 9 */}
-        <div className="w-full flex items-center justify-between pb-4 border-b border-slate-100 mb-3">
+        <div className="w-full flex items-center justify-between pb-4 border-b border-slate-100 mb-3.5">
           <button
             type="button"
             aria-label="Back"
@@ -52,10 +52,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({
           </div>
         </div>
 
-        {/* Shop Items List matching Reference Screen 9 */}
-        <div className="flex-1 overflow-y-auto flex flex-col gap-3 py-1">
+        {/* Shop Items List */}
+        <div className="flex-1 overflow-y-auto flex flex-col gap-3.5 py-1">
           {/* Item 1: Hint - 50 Coins */}
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-200 transition-all">
+          <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-200 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-[#EAF3FB] text-[#0077FE] flex items-center justify-center shrink-0">
                 <Lightbulb className="w-6 h-6 stroke-[2.2]" />
@@ -93,7 +93,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
           </div>
 
           {/* Item 2: Undo - 100 Coins */}
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-200 transition-all">
+          <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-blue-200 transition-all">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-[#EAF3FB] text-[#0077FE] flex items-center justify-center shrink-0">
                 <Undo2 className="w-6 h-6 stroke-[2.2]" />
@@ -118,44 +118,6 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                 const ok = onBuyItem('undos', ECONOMY_CONFIG.SHOP_PRICES.UNDO);
                 if (ok) {
                   sound.playCoin(soundEnabled);
-                  triggerHaptic('double', hapticsEnabled);
-                } else {
-                  sound.playBlocked(soundEnabled);
-                  triggerHaptic('heavy', hapticsEnabled);
-                }
-              }}
-              className="py-1.5 px-4 rounded-xl bg-[#0077FE] hover:bg-[#0066E0] active:scale-95 text-white font-extrabold text-xs shadow-xs transition-all cursor-pointer shrink-0"
-            >
-              Buy
-            </button>
-          </div>
-
-          {/* Item 3: Extra Life - 100 Coins */}
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-2xl hover:border-blue-200 transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#EAF3FB] text-rose-500 flex items-center justify-center shrink-0">
-                <Heart className="w-6 h-6 fill-rose-500 text-rose-500" />
-              </div>
-              <div className="flex flex-col text-left">
-                <h3 className="font-extrabold text-sm text-slate-900 leading-tight">
-                  Extra Life
-                </h3>
-                <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
-                  Get 1 extra life (+{ECONOMY_CONFIG.SHOP_GRANTS.LIFE_COUNT})
-                </p>
-                <div className="flex items-center gap-1 mt-1 text-amber-500 font-extrabold text-xs">
-                  <span>★</span>
-                  <span>{ECONOMY_CONFIG.SHOP_PRICES.EXTRA_LIFE}</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                const ok = onBuyItem('hearts', ECONOMY_CONFIG.SHOP_PRICES.EXTRA_LIFE);
-                if (ok) {
-                  sound.playHeartRefill(soundEnabled);
                   triggerHaptic('double', hapticsEnabled);
                 } else {
                   sound.playBlocked(soundEnabled);

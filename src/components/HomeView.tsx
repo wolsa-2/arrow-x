@@ -103,8 +103,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </span>
         </div>
 
-        {/* Action Button: Single Solid Blue Play Button with Level number below */}
-        <div className="w-full max-w-[260px] flex flex-col items-center gap-3 mb-6">
+        {/* Action Button: Single Solid Blue Play Button with Redesigned Level Badge below */}
+        <div className="w-full max-w-[260px] flex flex-col items-center gap-3 sm:gap-3.5 mb-6">
           {/* Primary Solid Blue Play Button */}
           <button
             type="button"
@@ -121,17 +121,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span>Play</span>
           </button>
 
-          {/* Level text underneath (tap to open level select) */}
+          {/* Redesigned Level Indicator Capsule Badge */}
           <button
             type="button"
+            aria-label={`Current Level: Level ${currentLevel}. Tap to open level select.`}
             onClick={() => {
               sound.playButton(settings.soundEnabled);
               triggerHaptic('light', settings.hapticsEnabled);
               onOpenLevelSelect();
             }}
-            className="text-sm font-bold text-slate-500 hover:text-[#0077FE] mt-1 transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center px-4 sm:px-5 py-1.5 rounded-full bg-[#EAF3FB] border border-[#BFDBFE] text-[#0A1931] shadow-2xs hover:bg-[#E1EDF9] hover:border-[#93C5FD] active:scale-95 transition-all cursor-pointer select-none"
           >
-            Level {currentLevel}
+            <span className="font-extrabold text-xs sm:text-sm text-[#0A1931] tracking-tight">
+              Level {currentLevel}
+            </span>
           </button>
         </div>
       </main>
