@@ -75,3 +75,16 @@ Output artifact: `android/app/build/outputs/apk/debug/app-debug.apk`
    ./gradlew bundleRelease
    ```
 Output artifact: `android/app/build/outputs/bundle/release/app-release.aab`
+
+---
+
+## 4. Google Play Store Assets & App Icon
+- **App Icon High-Res Specification**: 1024 × 1024 px, 32-bit PNG/JPEG, maximum 8MB.
+- **Active Icon Assets**:
+  - Light Canvas (Flagship): `/public/arrow-x-icon-1024.jpg`
+  - Dark Squircle (Alternate): `/public/arrow-x-icon-dark-1024.jpg`
+- **Design Identity**:
+  - Minimalist two-tone palette (Midnight Navy `#0A1931` & Electric Royal Blue `#0077FE`).
+  - Central bold geometric "X" enclosed within orthogonal winding escape arrows.
+  - Subtle ambient occlusion shadows and micro-beveled tactile finish.
+

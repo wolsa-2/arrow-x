@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { Arrow } from '../game/types';
 import {
   buildArrowTrack,
@@ -18,7 +18,7 @@ interface WindingArrowProps {
   onEscapeFinished?: (arrowId: string) => void;
 }
 
-export const WindingArrow: React.FC<WindingArrowProps> = ({
+const WindingArrowComponent: React.FC<WindingArrowProps> = ({
   arrow,
   cellSize,
   boardCols,
@@ -35,17 +35,39 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
     [arrow, cellSize, boardCols, boardRows]
   );
 
-  const [animElapsed, setAnimElapsed] = useState<number>(0);
+  // Initial resting render data
+  const initialRenderData: SlicedArrowRenderData | null = useMemo(
+    () => getArrowRenderData(track, 0),
+    [track]
+  );
+
+  const groupRef = useRef<SVGGElement>(null);
+  const mainPathRef = useRef<SVGPathElement>(null);
+  const headPolygonRef = useRef<SVGPolygonElement>(null);
+  const hitboxPathRef = useRef<SVGPathElement>(null);
+  const hitboxCircleRef = useRef<SVGCircleElement>(null);
+  const glowPathRef = useRef<SVGPathElement>(null);
+  const glowPolygonRef = useRef<SVGPolygonElement>(null);
+
   const animFrameRef = useRef<number | null>(null);
   const onEscapeFinishedRef = useRef(onEscapeFinished);
   onEscapeFinishedRef.current = onEscapeFinished;
 
   useEffect(() => {
     if (!isEscaping) {
-      setAnimElapsed(0);
       if (animFrameRef.current !== null) {
         cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = null;
+      }
+      if (groupRef.current) groupRef.current.style.display = '';
+      if (initialRenderData) {
+        if (mainPathRef.current) mainPathRef.current.setAttribute('d', initialRenderData.pathD);
+        if (headPolygonRef.current) headPolygonRef.current.setAttribute('points', initialRenderData.arrowHeadPoints);
+        if (hitboxPathRef.current) hitboxPathRef.current.setAttribute('d', initialRenderData.pathD);
+        if (hitboxCircleRef.current) {
+          hitboxCircleRef.current.setAttribute('cx', String(initialRenderData.tip.x));
+          hitboxCircleRef.current.setAttribute('cy', String(initialRenderData.tip.y));
+        }
       }
       return;
     }
@@ -57,11 +79,31 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
       if (startTime === null) startTime = time;
       const elapsed = time - startTime;
 
-      setAnimElapsed(elapsed);
+      const rd = getArrowRenderData(track, elapsed);
+      if (!rd) {
+        if (groupRef.current) groupRef.current.style.display = 'none';
+        animFrameRef.current = null;
+        if (onEscapeFinishedRef.current) {
+          onEscapeFinishedRef.current(arrow.id);
+        }
+        return;
+      }
+
+      // Directly update SVG attributes on DOM node - 0 React re-renders, 0 GC pauses, 60 FPS
+      if (mainPathRef.current) mainPathRef.current.setAttribute('d', rd.pathD);
+      if (headPolygonRef.current) headPolygonRef.current.setAttribute('points', rd.arrowHeadPoints);
+      if (hitboxPathRef.current) hitboxPathRef.current.setAttribute('d', rd.pathD);
+      if (hitboxCircleRef.current) {
+        hitboxCircleRef.current.setAttribute('cx', String(rd.tip.x));
+        hitboxCircleRef.current.setAttribute('cy', String(rd.tip.y));
+      }
+      if (glowPathRef.current) glowPathRef.current.setAttribute('d', rd.pathD);
+      if (glowPolygonRef.current) glowPolygonRef.current.setAttribute('points', rd.arrowHeadPoints);
 
       if (elapsed < totalMs) {
         animFrameRef.current = requestAnimationFrame(animate);
       } else {
+        if (groupRef.current) groupRef.current.style.display = 'none';
         animFrameRef.current = null;
         if (onEscapeFinishedRef.current) {
           onEscapeFinishedRef.current(arrow.id);
@@ -77,18 +119,9 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
         animFrameRef.current = null;
       }
     };
-  }, [arrow.id, isEscaping, track]);
+  }, [arrow.id, isEscaping, track, initialRenderData]);
 
-  // Compute rendered SVG geometry for current phase
-  const renderData: SlicedArrowRenderData | null = useMemo(() => {
-    if (!isEscaping) {
-      return getArrowRenderData(track, 0);
-    }
-    return getArrowRenderData(track, animElapsed);
-  }, [track, isEscaping, animElapsed]);
-
-  // If the arrow has completely exited the visible board, unmount from SVG
-  if (!renderData) {
+  if (!initialRenderData) {
     return null;
   }
 
@@ -99,6 +132,7 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
 
   return (
     <g
+      ref={groupRef}
       id={`arrow-${arrow.id}`}
       style={{
         pointerEvents: isEscaping ? 'none' : 'auto',
@@ -107,7 +141,7 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
         userSelect: 'none',
         WebkitUserSelect: 'none',
       }}
-      className={`cursor-pointer transition-opacity duration-100 outline-none focus:outline-none select-none active:opacity-80 ${isBlocked ? 'animate-wiggle' : ''}`}
+      className={`cursor-pointer pointer-events-auto transition-opacity duration-100 outline-none focus:outline-none select-none active:opacity-80 ${isBlocked ? 'animate-wiggle' : ''}`}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -126,25 +160,30 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
     >
       {/* Invisible generous touch target hitbox along the path (minimum 44px touch area) */}
       <path
-        d={renderData.pathD}
+        ref={hitboxPathRef}
+        d={initialRenderData.pathD}
         fill="none"
         stroke="transparent"
         strokeWidth={Math.max(44, cellSize * 0.75)}
         strokeLinecap="round"
         strokeLinejoin="round"
+        style={{ pointerEvents: 'stroke' }}
       />
       <circle
-        cx={renderData.tip.x}
-        cy={renderData.tip.y}
+        ref={hitboxCircleRef}
+        cx={initialRenderData.tip.x}
+        cy={initialRenderData.tip.y}
         r={Math.max(22, cellSize * 0.4)}
         fill="transparent"
+        style={{ pointerEvents: 'all' }}
       />
 
       {/* Hint glow effect */}
       {isHinted && (
         <>
           <path
-            d={renderData.pathD}
+            ref={glowPathRef}
+            d={initialRenderData.pathD}
             fill="none"
             stroke="#EF4444"
             strokeWidth={track.strokeWidth + 6}
@@ -154,7 +193,8 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
             className="animate-pulse"
           />
           <polygon
-            points={renderData.arrowHeadPoints}
+            ref={glowPolygonRef}
+            points={initialRenderData.arrowHeadPoints}
             fill="#EF4444"
             opacity="0.35"
             className="animate-pulse"
@@ -162,9 +202,10 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
         </>
       )}
 
-      {/* Main Arrow Stem (dynamically straightens first, then translates off-board) */}
+      {/* Main Arrow Stem (smooth snake-like slithering off-board) */}
       <path
-        d={renderData.pathD}
+        ref={mainPathRef}
+        d={initialRenderData.pathD}
         fill="none"
         stroke={strokeColor}
         strokeWidth={track.strokeWidth}
@@ -175,7 +216,8 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
 
       {/* Triangular Arrowhead (continuously anchored and aligned with stem) */}
       <polygon
-        points={renderData.arrowHeadPoints}
+        ref={headPolygonRef}
+        points={initialRenderData.arrowHeadPoints}
         fill={strokeColor}
         stroke={strokeColor}
         strokeWidth={1}
@@ -185,3 +227,18 @@ export const WindingArrow: React.FC<WindingArrowProps> = ({
     </g>
   );
 };
+
+export const WindingArrow = React.memo(WindingArrowComponent, (prev, next) => {
+  return (
+    prev.arrow.id === next.arrow.id &&
+    prev.arrow.x === next.arrow.x &&
+    prev.arrow.y === next.arrow.y &&
+    prev.arrow.direction === next.arrow.direction &&
+    prev.cellSize === next.cellSize &&
+    prev.boardCols === next.boardCols &&
+    prev.boardRows === next.boardRows &&
+    prev.isEscaping === next.isEscaping &&
+    prev.isBlocked === next.isBlocked &&
+    prev.isHinted === next.isHinted
+  );
+});

@@ -16,16 +16,17 @@ import { ECONOMY_CONFIG } from './game/economy';
 import { SplashView } from './components/SplashView';
 import { HomeView } from './components/HomeView';
 import { GameView } from './components/GameView';
-import { PauseModal } from './components/PauseModal';
-import { LevelCompleteModal } from './components/LevelCompleteModal';
-import { LevelSelectModal } from './components/LevelSelectModal';
-import { SettingsModal } from './components/SettingsModal';
-import { HowToPlayModal } from './components/HowToPlayModal';
-import { DailyChallengeModal } from './components/DailyChallengeModal';
-import { DailyRewardsModal } from './components/DailyRewardsModal';
-import { ShopModal } from './components/ShopModal';
-import { GameOverModal } from './components/GameOverModal';
-import { RewardedAdModal } from './components/RewardedAdModal';
+// Lazy load modals on demand so cold start Home screen bundle remains ultra-lightweight
+const PauseModal = React.lazy(() => import('./components/PauseModal').then((m) => ({ default: m.PauseModal })));
+const LevelCompleteModal = React.lazy(() => import('./components/LevelCompleteModal').then((m) => ({ default: m.LevelCompleteModal })));
+const LevelSelectModal = React.lazy(() => import('./components/LevelSelectModal').then((m) => ({ default: m.LevelSelectModal })));
+const SettingsModal = React.lazy(() => import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal })));
+const HowToPlayModal = React.lazy(() => import('./components/HowToPlayModal').then((m) => ({ default: m.HowToPlayModal })));
+const DailyChallengeModal = React.lazy(() => import('./components/DailyChallengeModal').then((m) => ({ default: m.DailyChallengeModal })));
+const DailyRewardsModal = React.lazy(() => import('./components/DailyRewardsModal').then((m) => ({ default: m.DailyRewardsModal })));
+const ShopModal = React.lazy(() => import('./components/ShopModal').then((m) => ({ default: m.ShopModal })));
+const GameOverModal = React.lazy(() => import('./components/GameOverModal').then((m) => ({ default: m.GameOverModal })));
+const RewardedAdModal = React.lazy(() => import('./components/RewardedAdModal').then((m) => ({ default: m.RewardedAdModal })));
 import { NetworkStatusToast, ToastMessage } from './components/NetworkStatusToast';
 import { StatusDialog, StatusDialogType } from './components/StatusDialogs';
 
@@ -76,6 +77,73 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
     };
   }, []);
+
+  // Android hardware back button and modal dismiss lifecycle handler
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      if (isSettingsOpen) { setIsSettingsOpen(false); return; }
+      if (isShopOpen) { setIsShopOpen(false); return; }
+      if (isLevelSelectOpen) { setIsLevelSelectOpen(false); return; }
+      if (isHowToPlayOpen) { setIsHowToPlayOpen(false); return; }
+      if (isDailyOpen) { setIsDailyOpen(false); return; }
+      if (isDailyRewardsOpen) { setIsDailyRewardsOpen(false); return; }
+      if (rewardedAdConfig) { setRewardedAdConfig(null); return; }
+      if (isPaused) { setIsPaused(false); return; }
+      if (screen === 'playing') {
+        setIsPaused(true);
+        return;
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleHardwareBack();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('popstate', handleHardwareBack);
+
+    let unlistenCap: (() => void) | null = null;
+    if (typeof window !== 'undefined' && (window as any).Capacitor?.isPluginAvailable?.('App')) {
+      const cap = (window as any).Capacitor;
+      cap.Plugins?.App?.addListener('backButton', () => {
+        if (
+          isSettingsOpen ||
+          isShopOpen ||
+          isLevelSelectOpen ||
+          isHowToPlayOpen ||
+          isDailyOpen ||
+          isDailyRewardsOpen ||
+          rewardedAdConfig ||
+          isPaused ||
+          screen === 'playing'
+        ) {
+          handleHardwareBack();
+        } else if (screen === 'home') {
+          cap.Plugins?.App?.exitApp?.();
+        }
+      })?.then((handle: any) => {
+        unlistenCap = () => handle?.remove?.();
+      })?.catch?.(() => {});
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('popstate', handleHardwareBack);
+      if (unlistenCap) unlistenCap();
+    };
+  }, [
+    isDailyOpen,
+    isDailyRewardsOpen,
+    isHowToPlayOpen,
+    isLevelSelectOpen,
+    isPaused,
+    isSettingsOpen,
+    isShopOpen,
+    rewardedAdConfig,
+    screen,
+  ]);
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -301,6 +369,7 @@ export default function App() {
 
   // Handle Game Over (0 lives reached)
   const handleGameOver = useCallback(() => {
+    admob.initAdMob();
     setIsGameOverOpen(true);
   }, []);
 
@@ -590,7 +659,10 @@ export default function App() {
             onPlay={handleStartLevel}
             onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
             onOpenDaily={() => setIsDailyOpen(true)}
-            onOpenShop={() => setIsShopOpen(true)}
+            onOpenShop={() => {
+              admob.initAdMob();
+              setIsShopOpen(true);
+            }}
             onOpenDailyRewards={() => setIsDailyRewardsOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onOpenHowToPlay={() => setIsHowToPlayOpen(true)}
@@ -659,8 +731,10 @@ export default function App() {
           />
         )}
 
-        {/* Screen 5: Pause Menu Modal */}
-        {isPaused && (
+        {/* Lazy-loaded Modal Layer */}
+        <React.Suspense fallback={null}>
+          {/* Screen 5: Pause Menu Modal */}
+          {isPaused && (
           <PauseModal
             levelId={currentLevelData.id}
             moves={0}
@@ -794,16 +868,17 @@ export default function App() {
           />
         )}
 
-        {/* Daily Challenge Puzzle Modal */}
-        {isDailyOpen && (
-          <DailyChallengeModal
-            progress={progress}
-            settings={settings}
-            theme={settings.theme}
-            onStartDaily={handleStartDaily}
-            onClose={() => setIsDailyOpen(false)}
-          />
-        )}
+          {/* Daily Challenge Puzzle Modal */}
+          {isDailyOpen && (
+            <DailyChallengeModal
+              progress={progress}
+              settings={settings}
+              theme={settings.theme}
+              onStartDaily={handleStartDaily}
+              onClose={() => setIsDailyOpen(false)}
+            />
+          )}
+        </React.Suspense>
 
         {/* Screen 15: Status Dialogs (Loading / No Internet / Ad Unavailable / Error) */}
         {statusDialog && (

@@ -11,6 +11,24 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      target: 'es2022',
+      minify: 'esbuild',
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 800,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('campaignLevels.json')) return 'campaign-levels';
+            if (id.includes('canvas-confetti')) return 'confetti';
+            if (id.includes('lucide-react')) return 'icons';
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+              return 'react-core';
+            }
+          },
+        },
+      },
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.

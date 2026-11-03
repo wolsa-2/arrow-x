@@ -17,7 +17,7 @@ interface HomeViewProps {
   onToggleSound: () => void;
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({
+const HomeViewComponent: React.FC<HomeViewProps> = ({
   progress,
   settings,
   onPlay,
@@ -206,3 +206,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
     </div>
   );
 };
+
+export const HomeView = React.memo(HomeViewComponent);
+

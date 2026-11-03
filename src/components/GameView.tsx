@@ -38,7 +38,15 @@ interface GameViewProps {
   onToggleSound?: () => void;
 }
 
-export const GameView: React.FC<GameViewProps> = ({
+function computeInitialCellSize(cols: number, rows: number): number {
+  if (typeof window === 'undefined') return 64;
+  const availW = Math.max(260, window.innerWidth - 36);
+  const availH = Math.max(260, window.innerHeight * 0.58);
+  const calculated = Math.min(Math.floor(availW / Math.max(1, cols)), Math.floor(availH / Math.max(1, rows)));
+  return Math.max(44, Math.min(115, calculated));
+}
+
+export const GameViewComponent: React.FC<GameViewProps> = ({
   level,
   settings,
   hearts,
@@ -68,9 +76,9 @@ export const GameView: React.FC<GameViewProps> = ({
   const [isCompleted, setIsCompleted] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
-  // Playfield container measurement
+  // Playfield container measurement with instant initial sizing
   const boardContainerRef = useRef<HTMLDivElement>(null);
-  const [cellSize, setCellSize] = useState<number>(64);
+  const [cellSize, setCellSize] = useState<number>(() => computeInitialCellSize(level.cols, level.rows));
 
   // Animation and completion timeout refs to prevent stale callbacks
   const victoryTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
@@ -188,7 +196,7 @@ export const GameView: React.FC<GameViewProps> = ({
           clearAllPendingTimeouts();
           victoryTimeoutRef.current = setTimeout(() => {
             onLevelComplete(stars, moves + 1, elapsedSeconds);
-          }, 350);
+          }, 120);
         }
         return;
       }
@@ -270,7 +278,7 @@ export const GameView: React.FC<GameViewProps> = ({
         clearAllPendingTimeouts();
         victoryTimeoutRef.current = setTimeout(() => {
           onLevelComplete(stars, nextMoves, elapsedSeconds);
-        }, 350);
+        }, 120);
       }
     },
     [
@@ -648,3 +656,6 @@ export const GameView: React.FC<GameViewProps> = ({
     </div>
   );
 };
+
+export const GameView = React.memo(GameViewComponent);
+

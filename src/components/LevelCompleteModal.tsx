@@ -20,7 +20,7 @@ interface LevelCompleteModalProps {
   onHome: () => void;
 }
 
-export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
+const LevelCompleteModalComponent: React.FC<LevelCompleteModalProps> = ({
   levelId,
   stars,
   moves,
@@ -32,19 +32,25 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
   onHome,
 }) => {
   useEffect(() => {
-    try {
-      confetti({
-        particleCount: 65,
-        spread: 60,
-        origin: { y: 0.55 },
-        colors: ['#0077FE', '#3B82F6', '#EF4444', '#F59E0B', '#10B981'],
-      });
-    } catch {}
+    // Schedule confetti after modal transition completes to prevent main-thread hitch
+    const timer = setTimeout(() => {
+      try {
+        confetti({
+          particleCount: 45,
+          spread: 60,
+          origin: { y: 0.55 },
+          colors: ['#0077FE', '#3B82F6', '#EF4444', '#F59E0B', '#10B981'],
+          disableForReducedMotion: true,
+        });
+      } catch {}
+    }, 80);
+
+    return () => clearTimeout(timer);
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs select-none animate-in fade-in duration-200">
-      <div className="w-full max-w-[310px] rounded-3xl p-6 bg-white border border-slate-200 shadow-2xl flex flex-col items-center text-center relative animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 select-none animate-in fade-in duration-150">
+      <div className="w-full max-w-[310px] rounded-3xl p-6 bg-white border border-slate-200 shadow-xl flex flex-col items-center text-center relative animate-in zoom-in-95 duration-150">
         {/* 3 Arched Golden Stars matching Reference Screen 6 */}
         <div className="flex items-end justify-center gap-2 mb-2 pt-2">
           {/* Star 1 (Left) */}
@@ -150,3 +156,6 @@ export const LevelCompleteModal: React.FC<LevelCompleteModalProps> = ({
     </div>
   );
 };
+
+export const LevelCompleteModal = React.memo(LevelCompleteModalComponent);
+

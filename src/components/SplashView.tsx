@@ -14,18 +14,13 @@ export const SplashView: React.FC<SplashViewProps> = ({ onFinish, autostart }) =
       return;
     }
 
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(onFinish, 80);
-          return 100;
-        }
-        return prev + 20;
-      });
-    }, 35);
+    // Fast, responsive splash transition without artificial wait loops
+    const timer = setTimeout(() => {
+      setProgress(100);
+      onFinish();
+    }, 120);
 
-    return () => clearInterval(interval);
+    return () => clearTimeout(timer);
   }, [autostart, onFinish]);
 
   return (

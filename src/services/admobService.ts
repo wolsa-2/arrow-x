@@ -34,75 +34,71 @@ class AdMobService {
   private currentRewardAmount: number = 3;
   private isRewardClaimed: boolean = false;
   private isNativeInitialized: boolean = false;
+  private isInitializing: boolean = false;
   private lastErrorMessage: string | null = null;
   private stateListeners: Set<StateListener> = new Set();
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      // Defer initial setup to keep startup instant and non-blocking
-      const initDeferred = () => {
-        if ('requestIdleCallback' in window) {
-          (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(() => {
-            this.initAdMob();
-          });
-        } else {
-          setTimeout(() => this.initAdMob(), 2000);
-        }
-      };
-      setTimeout(initDeferred, 1500);
-    }
+    // AdMob is initialized on-demand when user opens Game Over, Shop, or Watch Ad,
+    // ensuring 0 startup latency and 0 network blocking during initial app launch.
   }
 
   /**
-   * Initializes the Mobile Ads SDK
+   * Initializes the Mobile Ads SDK on-demand without blocking cold start
    */
   public async initAdMob(): Promise<void> {
-    if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('AdMob')) {
-      try {
-        await AdMob.initialize({
-          initializeForTesting: true,
-        });
-        this.isNativeInitialized = true;
+    if (this.isNativeInitialized || this.isInitializing) return;
+    this.isInitializing = true;
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('AdMob')) {
+        try {
+          await AdMob.initialize({
+            initializeForTesting: true,
+          });
+          this.isNativeInitialized = true;
 
-        // Register Native AdMob event listeners
-        await AdMob.addListener(RewardAdPluginEvents.Loaded, () => {
-          this.setState('ready');
-          this.lastErrorMessage = null;
-        });
+          // Register Native AdMob event listeners
+          await AdMob.addListener(RewardAdPluginEvents.Loaded, () => {
+            this.setState('ready');
+            this.lastErrorMessage = null;
+          });
 
-        await AdMob.addListener(RewardAdPluginEvents.FailedToLoad, (err) => {
-          this.setState('failed');
-          this.lastErrorMessage = err?.message || 'Failed to load test ad';
-        });
+          await AdMob.addListener(RewardAdPluginEvents.FailedToLoad, (err) => {
+            this.setState('failed');
+            this.lastErrorMessage = err?.message || 'Failed to load test ad';
+          });
 
-        await AdMob.addListener(RewardAdPluginEvents.Rewarded, (rewardItem) => {
-          // Google AdMob SDK confirms user completed the rewarded ad
-          const amount = rewardItem?.amount || this.currentRewardAmount || 3;
-          this.claimReward(this.currentRewardType, amount);
-        });
+          await AdMob.addListener(RewardAdPluginEvents.Rewarded, (rewardItem) => {
+            // Google AdMob SDK confirms user completed the rewarded ad
+            const amount = rewardItem?.amount || this.currentRewardAmount || 3;
+            this.claimReward(this.currentRewardType, amount);
+          });
 
-        await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
-          this.closeAdSession();
-          // Reload next rewarded ad automatically
-          this.preloadAd();
-        });
+          await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
+            this.closeAdSession();
+            // Reload next rewarded ad automatically
+            this.preloadAd();
+          });
 
-        await AdMob.addListener(RewardAdPluginEvents.FailedToShow, (err) => {
-          this.setState('failed');
-          this.lastErrorMessage = err?.message || 'Failed to show test ad';
-          this.closeAdSession();
-        });
+          await AdMob.addListener(RewardAdPluginEvents.FailedToShow, (err) => {
+            this.setState('failed');
+            this.lastErrorMessage = err?.message || 'Failed to show test ad';
+            this.closeAdSession();
+          });
 
-        // Preload first ad
-        await this.preloadAd();
-        return;
-      } catch (err) {
-        console.warn('AdMob native initialization fallback to web service:', err);
+          // Preload first ad
+          await this.preloadAd();
+          return;
+        } catch (err) {
+          console.warn('AdMob native initialization fallback to web service:', err);
+        }
       }
-    }
 
-    // In web/preview environment, preload initial test ad
-    await this.preloadAd();
+      // In web/preview environment, preload initial test ad
+      await this.preloadAd();
+    } finally {
+      this.isInitializing = false;
+    }
   }
 
   public getAppId(): string {
