@@ -1,0 +1,126 @@
+name: Build ARROW X Play Store AAB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arrow-x-play-store-aab
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build signed Android App Bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Validate release signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Android SDK 36
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install web dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Generate and sync Capacitor Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Configure release signing and Play target SDK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/arrow-x-release.jks"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("android/app/build.gradle")
+          if not path.exists():
+              raise SystemExit("Expected Capacitor Groovy file android/app/build.gradle was not generated.")
+          text = path.read_text()
+
+          android_block = re.search(r'android\\s*\\{', text)
+          if not android_block:
+              raise SystemExit("Could not locate android { } block in app/build.gradle.")
+
+          signing = """
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("ARROW_X_KEYSTORE_FILE"))
+                      storePassword System.getenv("ARROW_X_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("ARROW_X_KEY_ALIAS")
+                      keyPassword System.getenv("ARROW_X_KEY_PASSWORD")
+                  }
+              }
+          """
+          if "signingConfigs {" not in text:
+              text = text[:android_block.end()] + signing + text[android_block.end():]
+
+          release_block = re.search(r'release\\s*\\{', text)
+          if not release_block:
+              raise SystemExit("Could not locate release buildType in app/build.gradle.")
+          if "signingConfig signingConfigs.release" not in text:
+              text = text[:release_block.end()] + "\\n            signingConfig signingConfigs.release" + text[release_block.end():]
+
+          text = re.sub(r'compileSdkVersion\\s+[^\\n]+', 'compileSdkVersion 36', text, count=1)
+          text = re.sub(r'targetSdkVersion\\s+[^\\n]+', 'targetSdkVersion 36', text, count=1)
+          path.write_text(text)
+          PY
+        env:
+          ARROW_X_KEYSTORE_FILE: ${{ runner.temp }}/arrow-x-release.jks
+          ARROW_X_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ARROW_X_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ARROW_X_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Build signed AAB
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon
+
+      - name: Upload Play Store AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARROW-X-play-store-release-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
