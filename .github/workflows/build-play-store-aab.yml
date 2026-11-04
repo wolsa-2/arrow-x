@@ -99,7 +99,7 @@ jobs:
           if "signingConfigs {" not in text:
               text = text[:android_block.end()] + signing + text[android_block.end():]
 
-          release_block = re.search(r'release\s*\{', text)
+          release_block = re.search(r'buildTypes\s*\{[\\s\\S]*?release\s*\{', text)
           if not release_block:
               raise SystemExit("Could not locate release buildType in app/build.gradle.")
           if "signingConfig signingConfigs.release" not in text:
