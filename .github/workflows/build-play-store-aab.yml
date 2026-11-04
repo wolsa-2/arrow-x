@@ -51,7 +51,7 @@ jobs:
           "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Install web dependencies
-        run: npm ci --legacy-peer-deps --no-audit --no-fund
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Build web application
         run: npm run build
@@ -103,7 +103,7 @@ jobs:
           if not release_block:
               raise SystemExit("Could not locate release buildType in app/build.gradle.")
           if "signingConfig signingConfigs.release" not in text:
-              text = text[:release_block.end()] + "\\n            signingConfig signingConfigs.release" + text[release_block.end():]
+              text = text[:release_block.end()] + "\n            signingConfig signingConfigs.release" + text[release_block.end():]
 
           text = re.sub(r'compileSdkVersion\s+[^\n]+', 'compileSdkVersion 36', text, count=1)
           text = re.sub(r'targetSdkVersion\s+[^\n]+', 'targetSdkVersion 36', text, count=1)
