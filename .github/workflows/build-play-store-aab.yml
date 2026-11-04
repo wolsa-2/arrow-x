@@ -67,6 +67,10 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ARROW_X_KEYSTORE_FILE: ${{ runner.temp }}/arrow-x-release.jks
+          ARROW_X_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ARROW_X_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ARROW_X_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/arrow-x-release.jks"
           python3 - <<'PY'
@@ -78,7 +82,7 @@ jobs:
               raise SystemExit("Expected Capacitor Groovy file android/app/build.gradle was not generated.")
           text = path.read_text()
 
-          android_block = re.search(r'android\\s*\\{', text)
+          android_block = re.search(r'android\s*\{', text)
           if not android_block:
               raise SystemExit("Could not locate android { } block in app/build.gradle.")
 
@@ -95,22 +99,16 @@ jobs:
           if "signingConfigs {" not in text:
               text = text[:android_block.end()] + signing + text[android_block.end():]
 
-          release_block = re.search(r'release\\s*\\{', text)
+          release_block = re.search(r'release\s*\{', text)
           if not release_block:
               raise SystemExit("Could not locate release buildType in app/build.gradle.")
           if "signingConfig signingConfigs.release" not in text:
               text = text[:release_block.end()] + "\\n            signingConfig signingConfigs.release" + text[release_block.end():]
 
-          text = re.sub(r'compileSdkVersion\\s+[^\\n]+', 'compileSdkVersion 36', text, count=1)
-          text = re.sub(r'targetSdkVersion\\s+[^\\n]+', 'targetSdkVersion 36', text, count=1)
+          text = re.sub(r'compileSdkVersion\s+[^\n]+', 'compileSdkVersion 36', text, count=1)
+          text = re.sub(r'targetSdkVersion\s+[^\n]+', 'targetSdkVersion 36', text, count=1)
           path.write_text(text)
           PY
-        env:
-          ARROW_X_KEYSTORE_FILE: ${{ runner.temp }}/arrow-x-release.jks
-          ARROW_X_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          ARROW_X_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          ARROW_X_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-
       - name: Build signed AAB
         working-directory: android
         run: |
