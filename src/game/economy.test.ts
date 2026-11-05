@@ -131,17 +131,90 @@ test('Level restart or retry always restores exactly 3 lives', () => {
   assert.equal(currentLives, 3, 'Restarting must restore exactly 3 lives');
 });
 
-test('Google AdMob official Test IDs are strictly used', () => {
+test('Google AdMob official Test IDs are strictly used in test mode', () => {
+  // Ensure test mode is active
+  admob.setTestingMode(true);
+  assert.equal(admob.isTesting(), true, 'Testing mode must be active');
+
+  // Test App ID
   assert.equal(
     admob.getAppId(),
     'ca-app-pub-3940256099942544~3347511713',
     'AdMob Android App ID must match Google official test ID'
   );
+
+  // App Open Test Unit ID
   assert.equal(
-    admob.getAdUnitId(),
+    admob.getAppOpenUnitId(),
+    'ca-app-pub-3940256099942544/9257395921',
+    'AdMob App Open Test Unit ID must match Google official test ID'
+  );
+
+  // Rewarded Video Test Unit ID
+  assert.equal(
+    admob.getRewardedUnitId(),
     'ca-app-pub-3940256099942544/5224354917',
     'AdMob Rewarded Unit ID must match Google official test ID'
   );
+
+  // Backward compatibility alias
+  assert.equal(
+    admob.getAdUnitId(),
+    'ca-app-pub-3940256099942544/5224354917',
+    'getAdUnitId alias must match Rewarded Unit ID'
+  );
+});
+
+test('AdMob test and production configurations are strictly isolated and never mix', () => {
+  // Configure mock production IDs
+  const mockProdConfig = {
+    appId: 'ca-app-pub-1111222233334444~5555666677',
+    rewardedUnitId: 'ca-app-pub-1111222233334444/8888999900',
+    appOpenUnitId: 'ca-app-pub-1111222233334444/9999000011',
+  };
+  admob.setProductionConfig(mockProdConfig);
+
+  // Switch to Production Mode
+  admob.setTestingMode(false);
+  assert.equal(admob.isTesting(), false);
+  assert.equal(admob.getAppId(), mockProdConfig.appId, 'In production mode, real App ID must be returned');
+  assert.equal(admob.getRewardedUnitId(), mockProdConfig.rewardedUnitId, 'In production mode, real Rewarded ID must be returned');
+  assert.equal(admob.getAppOpenUnitId(), mockProdConfig.appOpenUnitId, 'In production mode, real App Open ID must be returned');
+
+  // Verify Test configuration was NOT modified or contaminated
+  const testConfig = admob.getTestConfig();
+  assert.equal(testConfig.appId, 'ca-app-pub-3940256099942544~3347511713');
+  assert.equal(testConfig.rewardedUnitId, 'ca-app-pub-3940256099942544/5224354917');
+  assert.equal(testConfig.appOpenUnitId, 'ca-app-pub-3940256099942544/9257395921');
+
+  // Switch back to Test Mode
+  admob.setTestingMode(true);
+  assert.equal(admob.isTesting(), true);
+  assert.equal(admob.getAppId(), 'ca-app-pub-3940256099942544~3347511713');
+  assert.equal(admob.getRewardedUnitId(), 'ca-app-pub-3940256099942544/5224354917');
+  assert.equal(admob.getAppOpenUnitId(), 'ca-app-pub-3940256099942544/9257395921');
+});
+
+test('App Open Ad preload, display, and dismissal lifecycle function properly', async () => {
+  admob.setTestingMode(true);
+
+  // Preload
+  const loaded = await admob.preloadAppOpenAd();
+  assert.equal(loaded, true, 'App Open ad should preload successfully');
+  assert.equal(admob.isAppOpenReady(), true, 'App Open ad should be ready');
+
+  // Show
+  let dismissed = false;
+  const shown = await admob.showAppOpenAd(() => {
+    dismissed = true;
+  });
+  assert.equal(shown, true, 'App Open ad should show');
+  assert.equal(admob.isAppOpenPlaying(), true, 'App Open state should be playing');
+
+  // Dismiss
+  admob.dismissAppOpenAd();
+  assert.equal(admob.isAppOpenPlaying(), false, 'App Open state should not be playing after dismissal');
+  assert.equal(dismissed, true, 'Dismiss callback must be invoked');
 });
 
 test('AdMob failure handling provides user-friendly error and does not crash', async () => {

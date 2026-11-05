@@ -27,11 +27,13 @@ const DailyRewardsModal = React.lazy(() => import('./components/DailyRewardsModa
 const ShopModal = React.lazy(() => import('./components/ShopModal').then((m) => ({ default: m.ShopModal })));
 const GameOverModal = React.lazy(() => import('./components/GameOverModal').then((m) => ({ default: m.GameOverModal })));
 const RewardedAdModal = React.lazy(() => import('./components/RewardedAdModal').then((m) => ({ default: m.RewardedAdModal })));
+const AppOpenAdModal = React.lazy(() => import('./components/AppOpenAdModal').then((m) => ({ default: m.AppOpenAdModal })));
 import { NetworkStatusToast, ToastMessage } from './components/NetworkStatusToast';
 import { StatusDialog, StatusDialogType } from './components/StatusDialogs';
 
 export default function App() {
   const [screen, setScreen] = useState<'splash' | 'home' | 'playing'>('splash');
+  const [isAppOpenAdVisible, setIsAppOpenAdVisible] = useState<boolean>(false);
   const [settings, setSettings] = useState<UserSettings>(() => loadSettings());
   const [progress, setProgress] = useState<SavedProgress>(() => loadProgress());
 
@@ -144,6 +146,30 @@ export default function App() {
     rewardedAdConfig,
     screen,
   ]);
+
+  // AdMob App Open Ad lifecycle & background resume listener
+  useEffect(() => {
+    const unsubscribe = admob.addAppOpenListener((adState) => {
+      setIsAppOpenAdVisible(adState === 'playing');
+    });
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (admob.isAppOpenReady()) {
+          admob.showAppOpenAd();
+        } else {
+          admob.preloadAppOpenAd();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -646,6 +672,9 @@ export default function App() {
             onFinish={() => {
               setScreen('home');
               document.body.dataset.state = 'title';
+              // Preload AdMob test ads in background for instant availability
+              admob.preloadAppOpenAd();
+              admob.preloadAd();
             }}
           />
         )}
@@ -816,6 +845,16 @@ export default function App() {
             hapticsEnabled={settings.hapticsEnabled}
             onRewardEarned={handleRewardEarned}
             onClose={() => setRewardedAdConfig(null)}
+          />
+        )}
+
+        {/* Screen 10b: App Open Ad (Google AdMob Test/Production format) */}
+        {isAppOpenAdVisible && (
+          <AppOpenAdModal
+            onDismiss={() => {
+              setIsAppOpenAdVisible(false);
+              admob.dismissAppOpenAd();
+            }}
           />
         )}
 

@@ -10,9 +10,13 @@ import {
   Shield,
   FileText,
   RotateCcw,
+  Tv,
+  CheckCircle2,
+  ShieldCheck,
 } from 'lucide-react';
 import { UserSettings } from '../game/types';
 import { sound, triggerHaptic } from '../utils/audio';
+import { admob, ADMOB_TEST_CONFIG } from '../services/admobService';
 
 interface SettingsModalProps {
   settings: UserSettings;
@@ -27,7 +31,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onResetProgress,
   onClose,
 }) => {
-  const [showDocModal, setShowDocModal] = useState<'privacy' | 'terms' | null>(null);
+  const [showDocModal, setShowDocModal] = useState<'privacy' | 'terms' | 'admob' | null>(null);
+  const [isTestMode, setIsTestMode] = useState<boolean>(() => admob.isTesting());
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/40 backdrop-blur-sm select-none animate-in fade-in duration-150">
@@ -183,6 +188,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
+
+          {/* 8. AdMob Integration & Diagnostics Modal Row */}
+          <button
+            type="button"
+            onClick={() => setShowDocModal('admob')}
+            className="w-full flex items-center justify-between py-3 px-1 text-slate-800 hover:text-[#0077FE] transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3 font-bold text-sm">
+              <Tv className="w-5 h-5 text-[#0077FE]" />
+              <div className="flex flex-col text-left">
+                <span>AdMob Test & Production IDs</span>
+                <span className="text-[10px] text-emerald-600 font-semibold">Google Test Mode Active</span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
         </div>
 
         {/* Reset Progress Button */}
@@ -202,23 +223,129 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Privacy / Terms Modal */}
+        {/* Privacy / Terms / AdMob Diagnostics Modal */}
         {showDocModal && (
           <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="w-full max-w-xs bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center">
-              <h3 className="text-lg font-black text-slate-900 mb-2">
-                {showDocModal === 'privacy' ? 'Privacy Policy' : 'Terms of Service'}
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed mb-4">
-                Arrow Escape Puzzle respects your privacy. All game progress and settings are saved locally on your device. No personal data is collected or shared with external parties.
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowDocModal(null)}
-                className="w-full py-2.5 rounded-full bg-[#0077FE] text-white font-bold text-sm"
-              >
-                Close
-              </button>
+            <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-slate-900 max-h-[80vh] overflow-y-auto">
+              {showDocModal === 'admob' ? (
+                <div className="w-full flex flex-col items-center text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#0077FE] flex items-center justify-center mb-2">
+                    <Tv className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 mb-0.5">
+                    AdMob Configuration
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Development Test IDs & Release Separation
+                  </p>
+
+                  {/* Mode Banner */}
+                  <div className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 mb-3 text-left">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-700">Active Mode:</span>
+                      <span
+                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                          isTestMode ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {isTestMode ? 'Official Test Mode' : 'Production Mode'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      {isTestMode
+                        ? 'Using official Google demo IDs. Ad formats will never incur policy violations during testing.'
+                        : 'Using safely isolated Production IDs reserved for Google Play release.'}
+                    </p>
+                  </div>
+
+                  {/* Configured IDs List */}
+                  <div className="w-full flex flex-col gap-2 text-left mb-4">
+                    {/* App ID */}
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Google App ID
+                      </div>
+                      <div className="text-xs font-mono font-semibold text-slate-800 break-all select-all">
+                        {admob.getAppId()}
+                      </div>
+                    </div>
+
+                    {/* App Open Ad Unit ID */}
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>App Open Ad Unit ID</span>
+                        <span className="text-blue-600 font-sans font-bold">App Open</span>
+                      </div>
+                      <div className="text-xs font-mono font-semibold text-slate-800 break-all select-all">
+                        {admob.getAppOpenUnitId()}
+                      </div>
+                    </div>
+
+                    {/* Rewarded Video Ad Unit ID */}
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>Rewarded Video Unit ID</span>
+                        <span className="text-blue-600 font-sans font-bold">Rewarded</span>
+                      </div>
+                      <div className="text-xs font-mono font-semibold text-slate-800 break-all select-all">
+                        {admob.getRewardedUnitId()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Interactive Test Action */}
+                  <div className="w-full flex flex-col gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDocModal(null);
+                        onClose();
+                        admob.showAppOpenAd();
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-[#0077FE] hover:bg-[#0066E0] text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Tv className="w-4 h-4" />
+                      <span>Test App Open Ad Now</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newMode = !isTestMode;
+                        admob.setTestingMode(newMode);
+                        setIsTestMode(newMode);
+                      }}
+                      className="w-full py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <span>Switch to {isTestMode ? 'Production IDs' : 'Test IDs'}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDocModal(null)}
+                    className="w-full py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full flex flex-col items-center text-center">
+                  <h3 className="text-lg font-black text-slate-900 mb-2">
+                    {showDocModal === 'privacy' ? 'Privacy Policy' : 'Terms of Service'}
+                  </h3>
+                  <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                    Arrow Escape Puzzle respects your privacy. All game progress and settings are saved locally on your device. No personal data is collected or shared with external parties.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowDocModal(null)}
+                    className="w-full py-2.5 rounded-full bg-[#0077FE] text-white font-bold text-sm cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

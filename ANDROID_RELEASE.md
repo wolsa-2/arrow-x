@@ -9,8 +9,16 @@
 - **Minimum SDK**: Android 7.0 (API 24)
 - **Orientation**: Portrait (`portrait`)
 - **Theme Color**: `#FFFFFF`
-- **AdMob Android App ID**: `ca-app-pub-3940256099942544~3347511713`
+- **AdMob Android Test App ID**: `ca-app-pub-3940256099942544~3347511713`
+- **AdMob App Open Test Unit ID**: `ca-app-pub-3940256099942544/9257395921`
 - **AdMob Rewarded Video Test Unit ID**: `ca-app-pub-3940256099942544/5224354917`
+
+### AdMob Development vs Production Architecture:
+- **Development / Testing**: Strict usage of Google's official Android Test IDs.
+  - Test App ID: `ca-app-pub-3940256099942544~3347511713`
+  - App Open Test ID: `ca-app-pub-3940256099942544/9257395921`
+  - Rewarded Video Test ID: `ca-app-pub-3940256099942544/5224354917`
+- **Production Release**: Separate production release configuration. Production IDs are provided via `.env` or build environment variables (`VITE_ADMOB_PROD_APP_ID`, `VITE_ADMOB_PROD_REWARDED_ID`, `VITE_ADMOB_PROD_APP_OPEN_ID`) with `VITE_ADMOB_TEST_MODE=false`. Test and Production configurations remain isolated and are never mixed.
 
 ---
 
