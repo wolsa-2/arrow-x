@@ -53,8 +53,12 @@ export function canArrowEscape(
   const trajectory: Array<{ x: number; y: number }> = [];
 
   // Determine starting ray cell (just in front of the arrow head)
-  let curX = arrow.x;
-  let curY = arrow.y;
+  const headPos =
+    arrow.points && arrow.points.length > 0
+      ? arrow.points[arrow.points.length - 1]
+      : { x: arrow.x, y: arrow.y };
+  let curX = headPos.x;
+  let curY = headPos.y;
 
   let dx = 0;
   let dy = 0;
@@ -145,18 +149,52 @@ export function calculateStars(movesTaken: number, parMoves: number): number {
 }
 
 /**
- * Returns rotation angle in degrees for rendering an arrow pointing in the given direction.
- * 0deg is UP.
+ * Resolves the exact arrow selected at a pixel coordinate on the game board.
+ * 1. Maps (clickX, clickY) directly to grid cell (col, row).
+ *    If an active arrow occupies that cell, it is returned with 100% precision.
+ * 2. If the click fell slightly into the cell margin or empty boundary,
+ *    a proximity check finds the closest arrow's cell center within a tight threshold.
  */
-export function getDirectionAngle(direction: Direction): number {
-  switch (direction) {
-    case 'up':
-      return 0;
-    case 'right':
-      return 90;
-    case 'down':
-      return 180;
-    case 'left':
-      return 270;
+export function findArrowAtBoardCoord(
+  arrows: Arrow[],
+  clickX: number,
+  clickY: number,
+  cellSize: number,
+  cols: number,
+  rows: number
+): Arrow | null {
+  if (cellSize <= 0 || arrows.length === 0) return null;
+
+  const col = Math.floor(clickX / cellSize);
+  const row = Math.floor(clickY / cellSize);
+
+  // 1. Direct grid cell occupancy check (100% deterministic, no hitbox bleed)
+  if (col >= 0 && col < cols && row >= 0 && row < rows) {
+    for (const arrow of arrows) {
+      const cells = getOccupiedCells(arrow);
+      if (cells.some((c) => c.x === col && c.y === row)) {
+        return arrow;
+      }
+    }
   }
+
+  // 2. Proximity check for near-miss taps within 0.65 * cellSize of an occupied cell center
+  let closestArrow: Arrow | null = null;
+  let minDistance = cellSize * 0.65;
+
+  for (const arrow of arrows) {
+    const cells = getOccupiedCells(arrow);
+    for (const cell of cells) {
+      const centerX = (cell.x + 0.5) * cellSize;
+      const centerY = (cell.y + 0.5) * cellSize;
+      const dist = Math.hypot(clickX - centerX, clickY - centerY);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestArrow = arrow;
+      }
+    }
+  }
+
+  return closestArrow;
 }
+

@@ -5,7 +5,6 @@ import { ECONOMY_CONFIG } from '../game/economy';
 import { admob, AdState } from '../services/admobService';
 
 interface GameOverModalProps {
-  levelId: number;
   coins: number;
   soundEnabled: boolean;
   hapticsEnabled: boolean;
@@ -16,7 +15,6 @@ interface GameOverModalProps {
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
-  levelId,
   coins,
   soundEnabled,
   hapticsEnabled,

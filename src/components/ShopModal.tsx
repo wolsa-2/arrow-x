@@ -5,9 +5,6 @@ import { ECONOMY_CONFIG } from '../game/economy';
 
 interface ShopModalProps {
   coins: number;
-  hintsCount: number;
-  bombsCount: number;
-  undosCount: number;
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   onBuyItem: (item: 'hints' | 'bomb' | 'undos' | 'hearts', cost: number) => boolean;

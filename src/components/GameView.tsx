@@ -10,7 +10,7 @@ import {
   Bomb,
 } from 'lucide-react';
 import { Arrow, LevelData, UserSettings } from '../game/types';
-import { canArrowEscape, findEscapableArrows, calculateStars } from '../game/rules';
+import { canArrowEscape, findEscapableArrows, calculateStars, findArrowAtBoardCoord } from '../game/rules';
 import { cloneArrows } from '../game/levels';
 import { WindingArrow } from './WindingArrow';
 import { sound, triggerHaptic } from '../utils/audio';
@@ -19,7 +19,6 @@ import { ConfirmDialog } from './ConfirmDialog';
 interface GameViewProps {
   level: LevelData;
   settings: UserSettings;
-  theme: 'dark' | 'light';
   hearts: number;
   hintsRemaining: number;
   bombsRemaining: number;
@@ -35,7 +34,6 @@ interface GameViewProps {
   onGameOver: () => void;
   onOpenLevelSelect: () => void;
   onOpenHowToPlay: () => void;
-  onToggleSound?: () => void;
 }
 
 function computeInitialCellSize(cols: number, rows: number): number {
@@ -76,8 +74,9 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
   const [isCompleted, setIsCompleted] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
-  // Playfield container measurement with instant initial sizing
+  // Playfield container and SVG element measurement
   const boardContainerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [cellSize, setCellSize] = useState<number>(() => computeInitialCellSize(level.cols, level.rows));
 
   // Animation and completion timeout refs to prevent stale callbacks
@@ -119,8 +118,9 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
   // Reset when level changes
   useEffect(() => {
     clearAllPendingTimeouts();
-    isProcessingTapRef.current = false;
-    setActiveArrows(cloneArrows(level.arrows));
+    const cloned = cloneArrows(level.arrows);
+    activeArrowsRef.current = cloned;
+    setActiveArrows(cloned);
     setHistory([]);
     setMoves(0);
     setElapsedSeconds(0);
@@ -130,6 +130,12 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
     setIsBombActive(false);
     setIsCompleted(false);
     setShowRestartConfirm(false);
+    isProcessingTapRef.current = false;
+    escapingIdRef.current = null;
+    isBombActiveRef.current = false;
+    isCompletedRef.current = false;
+    movesRef.current = 0;
+    elapsedSecondsRef.current = 0;
   }, [clearAllPendingTimeouts, level]);
 
   // Dynamically compute grid cell size to maximize board presence on mobile
@@ -159,16 +165,41 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
   // Tap processing lock to strictly prevent duplicate taps or rapid multi-heart loss
   const isProcessingTapRef = useRef<boolean>(false);
 
+  // Live state refs ensure collision check and tap callbacks always see the latest board state without closure lag
+  const activeArrowsRef = useRef<Arrow[]>(activeArrows);
+  activeArrowsRef.current = activeArrows;
+
+  const heartsRef = useRef<number>(hearts);
+  heartsRef.current = hearts;
+
+  const movesRef = useRef<number>(moves);
+  movesRef.current = moves;
+
+  const elapsedSecondsRef = useRef<number>(elapsedSeconds);
+  elapsedSecondsRef.current = elapsedSeconds;
+
+  const isBombActiveRef = useRef<boolean>(isBombActive);
+  isBombActiveRef.current = isBombActive;
+
+  const isPausedRef = useRef<boolean>(isPaused);
+  isPausedRef.current = isPaused;
+
+  const isCompletedRef = useRef<boolean>(isCompleted);
+  isCompletedRef.current = isCompleted;
+
+  const escapingIdRef = useRef<string | null>(escapingId);
+  escapingIdRef.current = escapingId;
+
   // Arrow Tap Handler with collision check before starting animation
   const handleArrowTap = useCallback(
     (arrow: Arrow) => {
       // Reject taps if already processing, escaping, paused, puzzle completed, or out of hearts
       if (
         isProcessingTapRef.current ||
-        escapingId !== null ||
-        isCompleted ||
-        hearts <= 0 ||
-        isPaused
+        escapingIdRef.current !== null ||
+        isCompletedRef.current ||
+        heartsRef.current <= 0 ||
+        isPausedRef.current
       ) {
         return;
       }
@@ -177,40 +208,51 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
       setHintId(null);
       setBlockedId(null);
 
+      const currentActive = activeArrowsRef.current;
+      const liveArrow = currentActive.find((a) => a.id === arrow.id);
+      if (!liveArrow) {
+        isProcessingTapRef.current = false;
+        return;
+      }
+
       // Handle Bomb Power-up Mode: Destroys targeted arrow
-      if (isBombActive) {
+      if (isBombActiveRef.current) {
         sound.playBomb(settings.soundEnabled);
         triggerHaptic('heavy', settings.hapticsEnabled);
         setIsBombActive(false);
-        setHistory((prev) => [...prev, activeArrows]);
-        const nextActive = activeArrows.filter((a) => a.id !== arrow.id);
+        isBombActiveRef.current = false;
+        setHistory((prev) => [...prev, currentActive]);
+        const nextActive = currentActive.filter((a) => a.id !== liveArrow.id);
+        activeArrowsRef.current = nextActive;
         setActiveArrows(nextActive);
-        onUseBomb(arrow.id);
+        onUseBomb(liveArrow.id);
         isProcessingTapRef.current = false;
 
         if (nextActive.length === 0) {
           setIsCompleted(true);
+          isCompletedRef.current = true;
           sound.playVictory(settings.soundEnabled);
           triggerHaptic('double', settings.hapticsEnabled);
-          const stars = calculateStars(moves + 1, level.parMoves);
+          const stars = calculateStars(movesRef.current + 1, level.parMoves);
           clearAllPendingTimeouts();
           victoryTimeoutRef.current = setTimeout(() => {
-            onLevelComplete(stars, moves + 1, elapsedSeconds);
+            onLevelComplete(stars, movesRef.current + 1, elapsedSecondsRef.current);
           }, 120);
         }
         return;
       }
 
       const obstacles = level.obstacles || [];
-      const result = canArrowEscape(arrow, activeArrows, obstacles, level.cols, level.rows);
+      const result = canArrowEscape(liveArrow, currentActive, obstacles, level.cols, level.rows);
 
       if (!result.canEscape) {
         // Blocked move: turns coral-red, wiggles, deducts exactly 1 heart, never moves
         sound.playBlocked(settings.soundEnabled);
         triggerHaptic('medium', settings.hapticsEnabled);
-        setBlockedId(arrow.id);
+        setBlockedId(liveArrow.id);
 
-        const nextHearts = Math.max(0, hearts - 1);
+        const nextHearts = Math.max(0, heartsRef.current - 1);
+        heartsRef.current = nextHearts;
         onHeartLost(nextHearts);
 
         clearAllPendingTimeouts();
@@ -231,22 +273,15 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
       // Valid escape: start polyline path animation
       sound.playEscape(settings.soundEnabled);
       triggerHaptic('light', settings.hapticsEnabled);
-      setEscapingId(arrow.id);
+      escapingIdRef.current = liveArrow.id;
+      setEscapingId(liveArrow.id);
     },
     [
-      activeArrows,
       clearAllPendingTimeouts,
-      elapsedSeconds,
-      escapingId,
-      hearts,
-      isBombActive,
-      isCompleted,
-      isPaused,
       level.cols,
       level.obstacles,
       level.parMoves,
       level.rows,
-      moves,
       onGameOver,
       onHeartLost,
       onLevelComplete,
@@ -256,14 +291,57 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
     ]
   );
 
+  // Board-level pointer resolver: guarantees exact grid mapping from tap coordinates
+  const handleBoardPointerTap = useCallback(
+    (clientX: number, clientY: number, fallbackArrow?: Arrow) => {
+      if (
+        isProcessingTapRef.current ||
+        escapingIdRef.current !== null ||
+        isCompletedRef.current ||
+        heartsRef.current <= 0 ||
+        isPausedRef.current
+      ) {
+        return;
+      }
+
+      let targetArrow: Arrow | null = null;
+
+      if (svgRef.current && clientX > 0 && clientY > 0) {
+        const rect = svgRef.current.getBoundingClientRect();
+        const clickX = clientX - rect.left;
+        const clickY = clientY - rect.top;
+
+        targetArrow = findArrowAtBoardCoord(
+          activeArrowsRef.current,
+          clickX,
+          clickY,
+          cellSize,
+          level.cols,
+          level.rows
+        );
+      }
+
+      if (!targetArrow && fallbackArrow) {
+        targetArrow = activeArrowsRef.current.find((a) => a.id === fallbackArrow.id) || null;
+      }
+
+      if (targetArrow) {
+        handleArrowTap(targetArrow);
+      }
+    },
+    [cellSize, handleArrowTap, level.cols, level.rows]
+  );
+
   // Called strictly when arrow finishes escaping off the board
   const handleEscapeFinished = useCallback(
     (arrowId: string) => {
-      setHistory((prev) => [...prev, activeArrows]);
-      const nextMoves = moves + 1;
+      const currentActive = activeArrowsRef.current;
+      setHistory((prev) => [...prev, currentActive]);
+      const nextMoves = movesRef.current + 1;
       setMoves(nextMoves);
 
-      const nextActive = activeArrows.filter((a) => a.id !== arrowId);
+      const nextActive = currentActive.filter((a) => a.id !== arrowId);
+      activeArrowsRef.current = nextActive;
       setActiveArrows(nextActive);
       setEscapingId(null);
       isProcessingTapRef.current = false;
@@ -277,16 +355,13 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
         const stars = calculateStars(nextMoves, level.parMoves);
         clearAllPendingTimeouts();
         victoryTimeoutRef.current = setTimeout(() => {
-          onLevelComplete(stars, nextMoves, elapsedSeconds);
+          onLevelComplete(stars, nextMoves, elapsedSecondsRef.current);
         }, 120);
       }
     },
     [
-      activeArrows,
       clearAllPendingTimeouts,
-      elapsedSeconds,
       level.parMoves,
-      moves,
       onLevelComplete,
       settings.hapticsEnabled,
       settings.soundEnabled,
@@ -308,7 +383,9 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
     triggerHaptic('light', settings.hapticsEnabled);
 
     const prevArrows = history[history.length - 1];
-    setActiveArrows(cloneArrows(prevArrows));
+    const restored = cloneArrows(prevArrows);
+    activeArrowsRef.current = restored;
+    setActiveArrows(restored);
     setHistory((h) => h.slice(0, -1));
     setMoves((m) => Math.max(0, m - 1));
     setHintId(null);
@@ -319,7 +396,7 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
   const handleHint = () => {
     if (escapingId !== null || isCompleted || hintsRemaining <= 0 || isPaused) return;
     const obstacles = level.obstacles || [];
-    const escapable = findEscapableArrows(activeArrows, obstacles, level.cols, level.rows);
+    const escapable = findEscapableArrows(activeArrowsRef.current, obstacles, level.cols, level.rows);
 
     if (escapable.length > 0) {
       sound.playHint(settings.soundEnabled);
@@ -526,9 +603,12 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
         >
           {/* Main Board SVG: Dot Matrix + Winding Arrows Layer */}
           <svg
-            className="absolute inset-0 w-full h-full overflow-visible"
+            ref={svgRef}
+            className="absolute inset-0 w-full h-full overflow-visible cursor-pointer"
             width={boardWidth}
             height={boardHeight}
+            onClick={(e) => handleBoardPointerTap(e.clientX, e.clientY)}
+            style={{ touchAction: 'none' }}
           >
             {/* Subtle Dotted Matrix Grid (Matching Screenshot 1) */}
             <g className="pointer-events-none select-none">
@@ -562,7 +642,7 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
                   isBlocked={isBlocked}
                   isHinted={isHinted}
                   onEscapeFinished={() => handleEscapeFinished(arrow.id)}
-                  onTap={() => handleArrowTap(arrow)}
+                  onTap={(a, cx, cy) => handleBoardPointerTap(cx ?? 0, cy ?? 0, a)}
                 />
               );
             })}

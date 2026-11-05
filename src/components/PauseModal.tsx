@@ -5,14 +5,10 @@ import { sound, triggerHaptic } from '../utils/audio';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface PauseModalProps {
-  levelId: number;
-  moves: number;
   settings: UserSettings;
-  theme: 'dark' | 'light';
   onResume: () => void;
   onRestart: () => void;
   onHome: () => void;
-  onOpenHowToPlay?: () => void;
   onToggleSound: () => void;
   onToggleMusic: () => void;
   onToggleHaptics: () => void;

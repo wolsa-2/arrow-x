@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { ChevronLeft, Lock, Star, ThumbsUp } from 'lucide-react';
 import { ALL_LEVELS } from '../game/levels';
-import { SavedProgress, Difficulty } from '../game/types';
+import { SavedProgress } from '../game/types';
 import { sound, triggerHaptic } from '../utils/audio';
 
 interface LevelSelectModalProps {
   progress: SavedProgress;
-  theme: 'dark' | 'light';
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   onSelectLevel: (levelId: number) => void;

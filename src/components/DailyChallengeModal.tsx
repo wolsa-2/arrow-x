@@ -1,12 +1,11 @@
 import React from 'react';
-import { X, Calendar, Play, CheckCircle2, Heart } from 'lucide-react';
+import { X, Calendar, Play, CheckCircle2 } from 'lucide-react';
 import { sound, triggerHaptic } from '../utils/audio';
 import { SavedProgress, UserSettings } from '../game/types';
 
 interface DailyChallengeModalProps {
   progress: SavedProgress;
   settings: UserSettings;
-  theme: 'dark' | 'light';
   onStartDaily: () => void;
   onClose: () => void;
 }

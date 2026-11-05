@@ -16,10 +16,8 @@ import { sound, triggerHaptic } from '../utils/audio';
 
 interface SettingsModalProps {
   settings: UserSettings;
-  theme: 'dark' | 'light';
   onUpdateSettings: (newSettings: Partial<UserSettings>) => void;
   onResetProgress: () => void;
-  onOpenHowToPlay: () => void;
   onClose: () => void;
 }
 

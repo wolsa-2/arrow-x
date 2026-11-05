@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canArrowEscape, findEscapableArrows, calculateStars, getOccupiedCells } from './rules';
+import { canArrowEscape, findEscapableArrows, calculateStars, getOccupiedCells, findArrowAtBoardCoord } from './rules';
 import { validateLevelStructure, solveLevel, testAndValidateLevel } from './solver';
 import { ALL_LEVELS, TOTAL_LEVELS_COUNT, getLevelById } from './levels';
 import { Arrow, Obstacle } from './types';
@@ -131,3 +131,72 @@ test('Ultra Pro Max level generation satisfies complexity and solvability', () =
   assert.equal(infiniteValidation.valid, true);
   assert.equal(infiniteValidation.solvable, true);
 });
+
+test('Level 7 coordinate mapping and path validation resolves exact intended arrows', () => {
+  const l7 = getLevelById(7);
+  assert.equal(l7.id, 7);
+  const cellSize = 60; // 60px cell size
+
+  // 1. Cell (5, 2) is occupied by a3. It must resolve to a3, never a2!
+  const clickA3TailX = (5 + 0.5) * cellSize;
+  const clickA3TailY = (2 + 0.8) * cellSize; // near bottom of cell (5, 2)
+  const resolvedA3 = findArrowAtBoardCoord(l7.arrows, clickA3TailX, clickA3TailY, cellSize, l7.cols, l7.rows);
+  assert.equal(resolvedA3?.id, 'a3', 'Tapping cell (5, 2) must strictly select a3');
+
+  // a3 has clear escape path pointing up
+  const a3Escape = canArrowEscape(resolvedA3!, l7.arrows, l7.obstacles || [], l7.cols, l7.rows);
+  assert.equal(a3Escape.canEscape, true, 'a3 must escape cleanly without obstruction');
+
+  // 2. Cell (5, 3) is occupied by a2. It must resolve to a2.
+  const clickA2HeadX = (5 + 0.5) * cellSize;
+  const clickA2HeadY = (3 + 0.3) * cellSize;
+  const resolvedA2 = findArrowAtBoardCoord(l7.arrows, clickA2HeadX, clickA2HeadY, cellSize, l7.cols, l7.rows);
+  assert.equal(resolvedA2?.id, 'a2', 'Tapping cell (5, 3) must select a2');
+
+  // While a3 is present, a2 is blocked by a3
+  const a2Blocked = canArrowEscape(resolvedA2!, l7.arrows, l7.obstacles || [], l7.cols, l7.rows);
+  assert.equal(a2Blocked.canEscape, false, 'a2 is blocked by a3');
+  assert.equal(a2Blocked.blocker?.id, 'a3');
+
+  // Once a3 is removed, a2 can escape
+  const activeWithoutA3 = l7.arrows.filter((a) => a.id !== 'a3');
+  const a2AfterA3 = canArrowEscape(resolvedA2!, activeWithoutA3, l7.obstacles || [], l7.cols, l7.rows);
+  assert.equal(a2AfterA3.canEscape, true, 'a2 escapes immediately once a3 is removed');
+
+  // 3. Cell (4, 3) is occupied by a1.
+  const clickA1X = (4 + 0.5) * cellSize;
+  const clickA1Y = (3 + 0.5) * cellSize;
+  const resolvedA1 = findArrowAtBoardCoord(l7.arrows, clickA1X, clickA1Y, cellSize, l7.cols, l7.rows);
+  assert.equal(resolvedA1?.id, 'a1', 'Tapping cell (4, 3) selects a1');
+  assert.equal(canArrowEscape(resolvedA1!, l7.arrows, l7.obstacles || [], l7.cols, l7.rows).canEscape, false, 'a1 is blocked by a2');
+
+  // Once a2 is removed, a1 can escape
+  const activeWithoutA2 = activeWithoutA3.filter((a) => a.id !== 'a2');
+  assert.equal(canArrowEscape(resolvedA1!, activeWithoutA2, l7.obstacles || [], l7.cols, l7.rows).canEscape, true, 'a1 escapes once a2 is removed');
+
+  // 4. Test remaining clear arrows in Level 7
+  // a7 (1, 0) pointing left
+  const resolvedA7 = findArrowAtBoardCoord(l7.arrows, (1 + 0.5) * cellSize, (0 + 0.5) * cellSize, cellSize, l7.cols, l7.rows);
+  assert.equal(resolvedA7?.id, 'a7');
+  assert.equal(canArrowEscape(resolvedA7!, l7.arrows, l7.obstacles || [], l7.cols, l7.rows).canEscape, true);
+
+  // a6 (0, 5) pointing down
+  const resolvedA6 = findArrowAtBoardCoord(l7.arrows, (0 + 0.5) * cellSize, (5 + 0.5) * cellSize, cellSize, l7.cols, l7.rows);
+  assert.equal(resolvedA6?.id, 'a6');
+  assert.equal(canArrowEscape(resolvedA6!, l7.arrows, l7.obstacles || [], l7.cols, l7.rows).canEscape, true);
+
+  // a5 (1, 3) pointing down
+  const resolvedA5 = findArrowAtBoardCoord(l7.arrows, (1 + 0.5) * cellSize, (3 + 0.5) * cellSize, cellSize, l7.cols, l7.rows);
+  assert.equal(resolvedA5?.id, 'a5');
+  assert.equal(canArrowEscape(resolvedA5!, l7.arrows, l7.obstacles || [], l7.cols, l7.rows).canEscape, true);
+
+  // a4 (2, 5) pointing down
+  const resolvedA4 = findArrowAtBoardCoord(l7.arrows, (2 + 0.5) * cellSize, (5 + 0.5) * cellSize, cellSize, l7.cols, l7.rows);
+  assert.equal(resolvedA4?.id, 'a4');
+  assert.equal(canArrowEscape(resolvedA4!, l7.arrows, l7.obstacles || [], l7.cols, l7.rows).canEscape, true);
+
+  // 5. Tapping far empty space returns null
+  const emptyTap = findArrowAtBoardCoord(l7.arrows, (0 + 0.5) * cellSize, (0 + 0.5) * cellSize, cellSize, l7.cols, l7.rows);
+  assert.equal(emptyTap, null, 'Empty cell (0, 0) returns null');
+});
+

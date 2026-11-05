@@ -3,7 +3,6 @@ import { ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { sound, triggerHaptic } from '../utils/audio';
 
 interface HowToPlayModalProps {
-  theme?: 'dark' | 'light';
   soundEnabled: boolean;
   onClose: () => void;
 }

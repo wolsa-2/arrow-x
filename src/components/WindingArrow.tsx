@@ -14,7 +14,7 @@ interface WindingArrowProps {
   isEscaping: boolean;
   isBlocked: boolean;
   isHinted: boolean;
-  onTap: (arrow: Arrow) => void;
+  onTap: (arrow: Arrow, clientX?: number, clientY?: number) => void;
   onEscapeFinished?: (arrowId: string) => void;
 }
 
@@ -45,7 +45,6 @@ const WindingArrowComponent: React.FC<WindingArrowProps> = ({
   const mainPathRef = useRef<SVGPathElement>(null);
   const headPolygonRef = useRef<SVGPolygonElement>(null);
   const hitboxPathRef = useRef<SVGPathElement>(null);
-  const hitboxCircleRef = useRef<SVGCircleElement>(null);
   const glowPathRef = useRef<SVGPathElement>(null);
   const glowPolygonRef = useRef<SVGPolygonElement>(null);
 
@@ -64,10 +63,6 @@ const WindingArrowComponent: React.FC<WindingArrowProps> = ({
         if (mainPathRef.current) mainPathRef.current.setAttribute('d', initialRenderData.pathD);
         if (headPolygonRef.current) headPolygonRef.current.setAttribute('points', initialRenderData.arrowHeadPoints);
         if (hitboxPathRef.current) hitboxPathRef.current.setAttribute('d', initialRenderData.pathD);
-        if (hitboxCircleRef.current) {
-          hitboxCircleRef.current.setAttribute('cx', String(initialRenderData.tip.x));
-          hitboxCircleRef.current.setAttribute('cy', String(initialRenderData.tip.y));
-        }
       }
       return;
     }
@@ -93,10 +88,6 @@ const WindingArrowComponent: React.FC<WindingArrowProps> = ({
       if (mainPathRef.current) mainPathRef.current.setAttribute('d', rd.pathD);
       if (headPolygonRef.current) headPolygonRef.current.setAttribute('points', rd.arrowHeadPoints);
       if (hitboxPathRef.current) hitboxPathRef.current.setAttribute('d', rd.pathD);
-      if (hitboxCircleRef.current) {
-        hitboxCircleRef.current.setAttribute('cx', String(rd.tip.x));
-        hitboxCircleRef.current.setAttribute('cy', String(rd.tip.y));
-      }
       if (glowPathRef.current) glowPathRef.current.setAttribute('d', rd.pathD);
       if (glowPolygonRef.current) glowPolygonRef.current.setAttribute('points', rd.arrowHeadPoints);
 
@@ -130,6 +121,9 @@ const WindingArrowComponent: React.FC<WindingArrowProps> = ({
   // Highlight / Hinted / Blocked: Vibrant Coral Red #EF4444
   const strokeColor = isBlocked || isHinted ? '#EF4444' : '#0B132B';
 
+  const onTapRef = useRef(onTap);
+  onTapRef.current = onTap;
+
   return (
     <g
       ref={groupRef}
@@ -145,37 +139,33 @@ const WindingArrowComponent: React.FC<WindingArrowProps> = ({
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        onTap(arrow);
+        if (onTapRef.current) {
+          onTapRef.current(arrow, e.clientX, e.clientY);
+        }
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           e.stopPropagation();
-          onTap(arrow);
+          if (onTapRef.current) {
+            onTapRef.current(arrow);
+          }
         }
       }}
       aria-label={`Arrow pointing ${arrow.direction} at col ${arrow.x + 1}, row ${arrow.y + 1}`}
       role="button"
       tabIndex={-1}
     >
-      {/* Invisible generous touch target hitbox along the path (minimum 44px touch area) */}
+      {/* Invisible touch target hitbox along the path strictly constrained to cell footprint */}
       <path
         ref={hitboxPathRef}
         d={initialRenderData.pathD}
         fill="none"
         stroke="transparent"
-        strokeWidth={Math.max(44, cellSize * 0.75)}
+        strokeWidth={Math.max(16, Math.min(28, cellSize * 0.48))}
         strokeLinecap="round"
         strokeLinejoin="round"
         style={{ pointerEvents: 'stroke' }}
-      />
-      <circle
-        ref={hitboxCircleRef}
-        cx={initialRenderData.tip.x}
-        cy={initialRenderData.tip.y}
-        r={Math.max(22, cellSize * 0.4)}
-        fill="transparent"
-        style={{ pointerEvents: 'all' }}
       />
 
       {/* Hint glow effect */}
@@ -239,6 +229,7 @@ export const WindingArrow = React.memo(WindingArrowComponent, (prev, next) => {
     prev.boardRows === next.boardRows &&
     prev.isEscaping === next.isEscaping &&
     prev.isBlocked === next.isBlocked &&
-    prev.isHinted === next.isHinted
+    prev.isHinted === next.isHinted &&
+    prev.onTap === next.onTap
   );
 });

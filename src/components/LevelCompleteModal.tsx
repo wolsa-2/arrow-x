@@ -5,18 +5,13 @@ import { sound, triggerHaptic } from '../utils/audio';
 
 interface LevelCompleteModalProps {
   levelId: number;
-  levelName: string;
   stars: number; // 1, 2, or 3
   moves: number;
   parMoves: number;
-  timeSeconds: number;
-  hasNextLevel: boolean;
-  theme: 'dark' | 'light';
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   onNextLevel: () => void;
   onReplay: () => void;
-  onOpenLevelSelect: () => void;
   onHome: () => void;
 }
 

@@ -6,15 +6,12 @@ import { sound, triggerHaptic } from '../utils/audio';
 interface HomeViewProps {
   progress: SavedProgress;
   settings: UserSettings;
-  theme: 'dark' | 'light';
   onPlay: (levelId: number) => void;
   onOpenLevelSelect: () => void;
-  onOpenDaily: () => void;
   onOpenShop: () => void;
   onOpenDailyRewards: () => void;
   onOpenSettings: () => void;
   onOpenHowToPlay?: () => void;
-  onToggleSound: () => void;
 }
 
 const HomeViewComponent: React.FC<HomeViewProps> = ({

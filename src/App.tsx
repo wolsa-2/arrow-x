@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { LevelData, SavedProgress, UserSettings } from './game/types';
-import { getLevelById, ALL_LEVELS, TOTAL_LEVELS_COUNT, cloneLevel } from './game/levels';
+import { getLevelById, TOTAL_LEVELS_COUNT, cloneLevel } from './game/levels';
 import { generateSolvableLevel } from './game/levelGenerator';
 import {
   loadProgress,
@@ -655,10 +655,8 @@ export default function App() {
           <HomeView
             progress={progress}
             settings={settings}
-            theme={settings.theme}
             onPlay={handleStartLevel}
             onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
-            onOpenDaily={() => setIsDailyOpen(true)}
             onOpenShop={() => {
               admob.initAdMob();
               setIsShopOpen(true);
@@ -666,9 +664,6 @@ export default function App() {
             onOpenDailyRewards={() => setIsDailyRewardsOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onOpenHowToPlay={() => setIsHowToPlayOpen(true)}
-            onToggleSound={() =>
-              handleUpdateSettings({ soundEnabled: !settings.soundEnabled })
-            }
           />
         )}
 
@@ -678,7 +673,6 @@ export default function App() {
             key={`game-${currentLevelData.id}-${isDailyActive ? 'daily' : 'reg'}-session-${gameSessionId}`}
             level={currentLevelData}
             settings={settings}
-            theme={settings.theme}
             hearts={hearts}
             hintsRemaining={progress.hintsCount ?? 3}
             bombsRemaining={progress.bombsCount ?? 1}
@@ -725,9 +719,6 @@ export default function App() {
             onGameOver={handleGameOver}
             onOpenLevelSelect={() => setIsLevelSelectOpen(true)}
             onOpenHowToPlay={() => setIsHowToPlayOpen(true)}
-            onToggleSound={() =>
-              handleUpdateSettings({ soundEnabled: !settings.soundEnabled })
-            }
           />
         )}
 
@@ -736,14 +727,10 @@ export default function App() {
           {/* Screen 5: Pause Menu Modal */}
           {isPaused && (
           <PauseModal
-            levelId={currentLevelData.id}
-            moves={0}
             settings={settings}
-            theme={settings.theme}
             onResume={handleResume}
             onRestart={restartCurrentLevel}
             onHome={handleReturnHome}
-            onOpenHowToPlay={() => setIsHowToPlayOpen(true)}
             onToggleSound={() =>
               handleUpdateSettings({ soundEnabled: !settings.soundEnabled })
             }
@@ -760,21 +747,13 @@ export default function App() {
         {completedResult && (
           <LevelCompleteModal
             levelId={currentLevelData.id}
-            levelName={currentLevelData.name}
             stars={completedResult.stars}
             moves={completedResult.moves}
             parMoves={currentLevelData.parMoves}
-            timeSeconds={completedResult.timeSeconds}
-            hasNextLevel={!isDailyActive && activeLevelId < TOTAL_LEVELS_COUNT}
-            theme={settings.theme}
             soundEnabled={settings.soundEnabled}
             hapticsEnabled={settings.hapticsEnabled}
             onNextLevel={handleNextLevel}
             onReplay={restartCurrentLevel}
-            onOpenLevelSelect={() => {
-              setCompletedResult(null);
-              setIsLevelSelectOpen(true);
-            }}
             onHome={handleReturnHome}
           />
         )}
@@ -782,7 +761,6 @@ export default function App() {
         {/* Screen 7: Game Over / Out of Lives Modal */}
         {isGameOverOpen && (
           <GameOverModal
-            levelId={currentLevelData.id}
             coins={progress.coins ?? 100}
             soundEnabled={settings.soundEnabled}
             hapticsEnabled={settings.hapticsEnabled}
@@ -799,7 +777,6 @@ export default function App() {
         {isLevelSelectOpen && (
           <LevelSelectModal
             progress={progress}
-            theme={settings.theme}
             soundEnabled={settings.soundEnabled}
             hapticsEnabled={settings.hapticsEnabled}
             onSelectLevel={handleStartLevel}
@@ -811,10 +788,8 @@ export default function App() {
         {isSettingsOpen && (
           <SettingsModal
             settings={settings}
-            theme={settings.theme}
             onUpdateSettings={handleUpdateSettings}
             onResetProgress={handleResetProgress}
-            onOpenHowToPlay={() => setIsHowToPlayOpen(true)}
             onClose={() => setIsSettingsOpen(false)}
           />
         )}
@@ -823,9 +798,6 @@ export default function App() {
         {isShopOpen && (
           <ShopModal
             coins={progress.coins ?? 100}
-            hintsCount={progress.hintsCount ?? 3}
-            bombsCount={progress.bombsCount ?? 1}
-            undosCount={progress.undosCount ?? 3}
             soundEnabled={settings.soundEnabled}
             hapticsEnabled={settings.hapticsEnabled}
             onBuyItem={handleBuyShopItem}
@@ -850,7 +822,6 @@ export default function App() {
         {/* Screen 11: Tutorial / How to Play Modal */}
         {isHowToPlayOpen && (
           <HowToPlayModal
-            theme={settings.theme}
             soundEnabled={settings.soundEnabled}
             onClose={() => setIsHowToPlayOpen(false)}
           />
@@ -873,7 +844,6 @@ export default function App() {
             <DailyChallengeModal
               progress={progress}
               settings={settings}
-              theme={settings.theme}
               onStartDaily={handleStartDaily}
               onClose={() => setIsDailyOpen(false)}
             />

@@ -36,6 +36,8 @@ export function cloneLevel(level: LevelData): LevelData {
  */
 export function getLevelById(id: number): LevelData {
   if (id >= 1 && id <= TOTAL_LEVELS_COUNT) {
+    const candidate = ALL_LEVELS[id - 1];
+    if (candidate && candidate.id === id) return cloneLevel(candidate);
     const found = ALL_LEVELS.find((l) => l.id === id);
     if (found) return cloneLevel(found);
   }
