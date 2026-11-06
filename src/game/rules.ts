@@ -168,7 +168,7 @@ export function findArrowAtBoardCoord(
   const col = Math.floor(clickX / cellSize);
   const row = Math.floor(clickY / cellSize);
 
-  // 1. Direct grid cell occupancy check (100% deterministic, no hitbox bleed)
+  // 1. Direct grid cell occupancy check (100% deterministic)
   if (col >= 0 && col < cols && row >= 0 && row < rows) {
     for (const arrow of arrows) {
       const cells = getOccupiedCells(arrow);
@@ -178,9 +178,36 @@ export function findArrowAtBoardCoord(
     }
   }
 
-  // 2. Proximity check for near-miss taps within 0.65 * cellSize of an occupied cell center
+  // 2. Edge / boundary arrowhead tap check (e.g. tapping arrowhead tip pointing right at boundary)
+  for (const arrow of arrows) {
+    const headPos =
+      arrow.points && arrow.points.length > 0
+        ? arrow.points[arrow.points.length - 1]
+        : { x: arrow.x, y: arrow.y };
+
+    let isPointingAtTap = false;
+    if (arrow.direction === 'right' && headPos.x === cols - 1 && col >= cols && row === headPos.y) {
+      isPointingAtTap = true;
+    } else if (arrow.direction === 'left' && headPos.x === 0 && col < 0 && row === headPos.y) {
+      isPointingAtTap = true;
+    } else if (arrow.direction === 'down' && headPos.y === rows - 1 && row >= rows && col === headPos.x) {
+      isPointingAtTap = true;
+    } else if (arrow.direction === 'up' && headPos.y === 0 && row < 0 && col === headPos.x) {
+      isPointingAtTap = true;
+    }
+
+    if (isPointingAtTap) {
+      const headCenterX = (headPos.x + 0.5) * cellSize;
+      const headCenterY = (headPos.y + 0.5) * cellSize;
+      if (Math.hypot(clickX - headCenterX, clickY - headCenterY) < cellSize * 1.1) {
+        return arrow;
+      }
+    }
+  }
+
+  // 3. Proximity check for near-miss taps within 0.75 * cellSize of an occupied cell center
   let closestArrow: Arrow | null = null;
-  let minDistance = cellSize * 0.65;
+  let minDistance = cellSize * 0.75;
 
   for (const arrow of arrows) {
     const cells = getOccupiedCells(arrow);

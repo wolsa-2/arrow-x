@@ -4,6 +4,16 @@ import { ECONOMY_CONFIG } from '../game/economy';
 const PROGRESS_STORAGE_KEY = 'arrow_escape_progress_v1';
 const SETTINGS_STORAGE_KEY = 'arrow_escape_settings_v1';
 
+/**
+ * Returns YYYY-MM-DD in user's local calendar timezone
+ */
+export function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export const DEFAULT_SETTINGS: UserSettings = {
   soundEnabled: true,
   musicEnabled: false,

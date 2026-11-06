@@ -180,14 +180,16 @@ const WindingArrowComponent: React.FC<WindingArrowProps> = ({
             strokeLinecap="round"
             strokeLinejoin="round"
             opacity="0.35"
-            className="animate-pulse"
+            className="animate-pulse pointer-events-none"
+            style={{ pointerEvents: 'none' }}
           />
           <polygon
             ref={glowPolygonRef}
             points={initialRenderData.arrowHeadPoints}
             fill="#EF4444"
             opacity="0.35"
-            className="animate-pulse"
+            className="animate-pulse pointer-events-none"
+            style={{ pointerEvents: 'none' }}
           />
         </>
       )}

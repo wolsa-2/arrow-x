@@ -10,7 +10,6 @@ on:
       - 'public/**'
       - 'index.html'
       - 'package.json'
-      - 'bun.lock'
       - 'vite.config.ts'
       - 'tsconfig.json'
       - 'ANDROID_RELEASE.md'
@@ -53,12 +52,25 @@ jobs:
       - name: Install web dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
+      - name: Run TypeScript checks
+        run: npm run lint
+
+      - name: Run automated game and level tests
+        run: npm test
+
       - name: Install Capacitor Android tooling
         run: npm install --legacy-peer-deps --no-save --no-audit --no-fund @capacitor/core@^8.6.0 @capacitor/cli@^8.6.0 @capacitor/android@^8.6.0
 
       - name: Configure Capacitor with Google AdMob
+        env:
+          PROD_APP_ID: ${{ secrets.ADMOB_PROD_APP_ID }}
         run: |
-          cat > capacitor.config.json <<'EOF'
+          ADMOB_APP_ID="${PROD_APP_ID:-ca-app-pub-3940256099942544~3347511713}"
+          INIT_TEST="true"
+          if [ -n "$PROD_APP_ID" ]; then
+            INIT_TEST="false"
+          fi
+          cat > capacitor.config.json <<EOF
           {
             "appId": "com.arrowx.game",
             "appName": "ARROW X",
@@ -70,8 +82,8 @@ jobs:
             },
             "plugins": {
               "AdMob": {
-                "appId": "ca-app-pub-3940256099942544~3347511713",
-                "initializeForTesting": true
+                "appId": "$ADMOB_APP_ID",
+                "initializeForTesting": $INIT_TEST
               }
             }
           }
@@ -85,10 +97,13 @@ jobs:
           npx cap add android
 
       - name: Inject Google AdMob App ID into AndroidManifest.xml
+        env:
+          PROD_APP_ID: ${{ secrets.ADMOB_PROD_APP_ID }}
         run: |
+          ADMOB_APP_ID="${PROD_APP_ID:-ca-app-pub-3940256099942544~3347511713}"
           if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
             if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" android/app/src/main/AndroidManifest.xml; then
-              sed -i '/<\/application>/i \\        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>' android/app/src/main/AndroidManifest.xml
+              sed -i "/<\/application>/i \\        <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$ADMOB_APP_ID\"/>" android/app/src/main/AndroidManifest.xml
             fi
           fi
 
@@ -101,6 +116,15 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
+      - name: Verify APK artifact is non-empty
+        run: |
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -s "$APK_PATH" ]; then
+            echo "Error: Output APK does not exist or is 0 bytes"
+            exit 1
+          fi
+          echo "Verified APK size: $(stat -c%s "$APK_PATH") bytes"
+
       - name: Upload ARROW X APK
         uses: actions/upload-artifact@v4
         with:
@@ -108,5 +132,3 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
-
-# Trigger a fresh build without changing game source or AdMob test configuration.

@@ -56,10 +56,10 @@ export const LevelSelectModal: React.FC<LevelSelectModalProps> = ({
             Select Level
           </h2>
 
-          {/* Star count pill matching Screen 4: ⭐ 25/200 */}
+          {/* Star count pill matching Screen 4 */}
           <div className="mt-1 flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-50 text-amber-700 text-xs font-black border border-amber-200/80">
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-            <span>{progress.totalStars || 25}/200</span>
+            <span>{progress.totalStars ?? 0} / 600</span>
           </div>
         </div>
 

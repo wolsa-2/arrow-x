@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Play, Settings as SettingsIcon, ShoppingBag, Gift, HelpCircle } from 'lucide-react';
 import { SavedProgress, UserSettings } from '../game/types';
 import { sound, triggerHaptic } from '../utils/audio';
+import { getLocalDateString } from '../utils/storage';
 
 interface HomeViewProps {
   progress: SavedProgress;
@@ -25,7 +26,7 @@ const HomeViewComponent: React.FC<HomeViewProps> = ({
   onOpenHowToPlay,
 }) => {
   const currentLevel = progress.highestUnlockedLevel || 1;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   const canClaimDailyReward = progress.lastClaimDate !== todayStr;
 
   // Keyboard shortcut to play

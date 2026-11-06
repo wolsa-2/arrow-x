@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 import { ChevronLeft, Check, Heart } from 'lucide-react';
 import { sound, triggerHaptic } from '../utils/audio';
 import { ECONOMY_CONFIG } from '../game/economy';
+import { getLocalDateString } from '../utils/storage';
 
 interface DailyRewardsModalProps {
   streak: number;
@@ -23,7 +24,7 @@ export const DailyRewardsModal: React.FC<DailyRewardsModalProps> = ({
   onClaimDay,
   onClose,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   const isClaimedToday = lastClaimDate === todayStr;
 
   // Active day in 7-day cycle (0 to 6)

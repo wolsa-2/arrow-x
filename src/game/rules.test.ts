@@ -200,3 +200,84 @@ test('Level 7 coordinate mapping and path validation resolves exact intended arr
   assert.equal(emptyTap, null, 'Empty cell (0, 0) returns null');
 });
 
+test('REGRESSION: Right-pointing arrow tap on boundary or cell edge correctly escapes', () => {
+  const cols = 5;
+  const rows = 5;
+  const cellSize = 50;
+
+  // Arrow R is in rightmost column (col 4, row 2) pointing RIGHT towards boundary
+  const arrowRight: Arrow = { id: 'arrow_r', x: 4, y: 2, direction: 'right' };
+  // Neighbor arrow N is at (4, 1) pointing UP and blocked
+  const blockerAbove: Arrow = { id: 'blocker_above', x: 4, y: 1, direction: 'up' };
+  const obstacle: Obstacle = { id: 'obs', x: 4, y: 0 }; // blocks blockerAbove
+
+  const arrows = [arrowRight, blockerAbove];
+  const obstacles = [obstacle];
+
+  // 1. Verify Arrow R can escape to the right
+  const escapeR = canArrowEscape(arrowRight, arrows, obstacles, cols, rows);
+  assert.equal(escapeR.canEscape, true, 'Right arrow pointing off-board must escape');
+
+  // 2. Verify blockerAbove is blocked
+  const escapeBlocker = canArrowEscape(blockerAbove, arrows, obstacles, cols, rows);
+  assert.equal(escapeBlocker.canEscape, false, 'Blocker arrow must be blocked by obstacle');
+
+  // 3. Tap on right boundary edge (clickX = 5.05 * cellSize, right on the tip of the arrowhead)
+  const boundaryTapX = (4 + 1.05) * cellSize;
+  const boundaryTapY = (2 + 0.5) * cellSize;
+  const resolvedBoundary = findArrowAtBoardCoord(arrows, boundaryTapX, boundaryTapY, cellSize, cols, rows);
+  assert.equal(resolvedBoundary?.id, 'arrow_r', 'Tapping arrowhead on right boundary must resolve to arrow_r');
+
+  // 4. Verify tap near center of arrow_r resolves to arrow_r
+  const centerTapX = (4 + 0.5) * cellSize;
+  const centerTapY = (2 + 0.5) * cellSize;
+  const resolvedCenter = findArrowAtBoardCoord(arrows, centerTapX, centerTapY, cellSize, cols, rows);
+  assert.equal(resolvedCenter?.id, 'arrow_r', 'Center tap must resolve to arrow_r');
+});
+
+test('REGRESSION: All 4 arrow directions can escape from their respective boundaries', () => {
+  const cols = 6;
+  const rows = 6;
+  const cellSize = 50;
+
+  // Up arrow at top boundary (col 3, row 0)
+  const up: Arrow = { id: 'up_edge', x: 3, y: 0, direction: 'up' };
+  assert.equal(canArrowEscape(up, [up], [], cols, rows).canEscape, true);
+  // Tap slightly above top boundary
+  const resolvedUp = findArrowAtBoardCoord([up], (3 + 0.5) * cellSize, -5, cellSize, cols, rows);
+  assert.equal(resolvedUp?.id, 'up_edge', 'Tap on top edge must resolve to up arrow');
+
+  // Down arrow at bottom boundary (col 3, row 5)
+  const down: Arrow = { id: 'down_edge', x: 3, y: 5, direction: 'down' };
+  assert.equal(canArrowEscape(down, [down], [], cols, rows).canEscape, true);
+  // Tap slightly below bottom boundary
+  const resolvedDown = findArrowAtBoardCoord([down], (3 + 0.5) * cellSize, (5 + 1.1) * cellSize, cellSize, cols, rows);
+  assert.equal(resolvedDown?.id, 'down_edge', 'Tap on bottom edge must resolve to down arrow');
+
+  // Left arrow at left boundary (col 0, row 3)
+  const left: Arrow = { id: 'left_edge', x: 0, y: 3, direction: 'left' };
+  assert.equal(canArrowEscape(left, [left], [], cols, rows).canEscape, true);
+  // Tap slightly left of boundary
+  const resolvedLeft = findArrowAtBoardCoord([left], -5, (3 + 0.5) * cellSize, cellSize, cols, rows);
+  assert.equal(resolvedLeft?.id, 'left_edge', 'Tap on left edge must resolve to left arrow');
+
+  // Right arrow at right boundary (col 5, row 3)
+  const right: Arrow = { id: 'right_edge', x: 5, y: 3, direction: 'right' };
+  assert.equal(canArrowEscape(right, [right], [], cols, rows).canEscape, true);
+  // Tap slightly right of boundary
+  const resolvedRight = findArrowAtBoardCoord([right], (5 + 1.1) * cellSize, (3 + 0.5) * cellSize, cellSize, cols, rows);
+  assert.equal(resolvedRight?.id, 'right_edge', 'Tap on right edge must resolve to right arrow');
+});
+
+test('REGRESSION: Procedural generation beyond level 200 produces valid solvable levels', () => {
+  for (const lvlId of [201, 202, 210, 250]) {
+    const level = getLevelById(lvlId);
+    assert.equal(level.id, lvlId);
+    assert.ok(level.arrows.length >= 3, `Level ${lvlId} must have at least 3 arrows`);
+    const sol = solveLevel(level);
+    assert.equal(sol.solvable, true, `Procedural level ${lvlId} must be solvable`);
+    assert.equal(sol.solutionOrder.length, level.arrows.length, `Solution must clear all arrows for level ${lvlId}`);
+  }
+});
+
+

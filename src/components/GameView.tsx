@@ -306,10 +306,19 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
 
       let targetArrow: Arrow | null = null;
 
-      if (svgRef.current && clientX > 0 && clientY > 0) {
+      // 1. Authoritative check: if the player tapped directly on an arrow SVG element,
+      // that tapped arrow is our primary target. Never override it with adjacent cell lookup!
+      if (fallbackArrow) {
+        targetArrow = activeArrowsRef.current.find((a) => a.id === fallbackArrow.id) || null;
+      }
+
+      // 2. Coordinate fallback: when the player taps the board canvas/empty space
+      if (!targetArrow && svgRef.current && clientX > 0 && clientY > 0) {
         const rect = svgRef.current.getBoundingClientRect();
-        const clickX = clientX - rect.left;
-        const clickY = clientY - rect.top;
+        const scaleX = rect.width > 0 ? (level.cols * cellSize) / rect.width : 1;
+        const scaleY = rect.height > 0 ? (level.rows * cellSize) / rect.height : 1;
+        const clickX = (clientX - rect.left) * scaleX;
+        const clickY = (clientY - rect.top) * scaleY;
 
         targetArrow = findArrowAtBoardCoord(
           activeArrowsRef.current,
@@ -319,10 +328,6 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
           level.cols,
           level.rows
         );
-      }
-
-      if (!targetArrow && fallbackArrow) {
-        targetArrow = activeArrowsRef.current.find((a) => a.id === fallbackArrow.id) || null;
       }
 
       if (targetArrow) {
@@ -338,6 +343,7 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
       const currentActive = activeArrowsRef.current;
       setHistory((prev) => [...prev, currentActive]);
       const nextMoves = movesRef.current + 1;
+      movesRef.current = nextMoves;
       setMoves(nextMoves);
 
       const nextActive = currentActive.filter((a) => a.id !== arrowId);
@@ -349,6 +355,7 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
       // Check level completion
       if (nextActive.length === 0) {
         setIsCompleted(true);
+        isCompletedRef.current = true;
         sound.playVictory(settings.soundEnabled);
         triggerHaptic('double', settings.hapticsEnabled);
 
@@ -387,7 +394,9 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
     activeArrowsRef.current = restored;
     setActiveArrows(restored);
     setHistory((h) => h.slice(0, -1));
-    setMoves((m) => Math.max(0, m - 1));
+    const nextMoves = Math.max(0, movesRef.current - 1);
+    movesRef.current = nextMoves;
+    setMoves(nextMoves);
     setHintId(null);
     onUseUndo();
   };
@@ -605,6 +614,7 @@ export const GameViewComponent: React.FC<GameViewProps> = ({
           <svg
             ref={svgRef}
             className="absolute inset-0 w-full h-full overflow-visible cursor-pointer"
+            viewBox={`0 0 ${boardWidth} ${boardHeight}`}
             width={boardWidth}
             height={boardHeight}
             onClick={(e) => handleBoardPointerTap(e.clientX, e.clientY)}

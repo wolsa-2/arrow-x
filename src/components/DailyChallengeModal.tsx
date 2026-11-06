@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Calendar, Play, CheckCircle2 } from 'lucide-react';
 import { sound, triggerHaptic } from '../utils/audio';
 import { SavedProgress, UserSettings } from '../game/types';
+import { getLocalDateString } from '../utils/storage';
 
 interface DailyChallengeModalProps {
   progress: SavedProgress;
@@ -16,7 +17,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
   onStartDaily,
   onClose,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   const isDoneToday = progress.dailyChallengeDate === todayStr && progress.dailyChallengeCompleted;
 
   const formattedDate = new Date().toLocaleDateString(undefined, {

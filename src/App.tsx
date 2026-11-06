@@ -8,6 +8,7 @@ import {
   loadSettings,
   saveSettings,
   resetAllProgress,
+  getLocalDateString,
 } from './utils/storage';
 import { sound } from './utils/audio';
 import { admob, AdReward } from './services/admobService';
@@ -150,7 +151,10 @@ export default function App() {
   // AdMob App Open Ad lifecycle & background resume listener
   useEffect(() => {
     const unsubscribe = admob.addAppOpenListener((adState) => {
-      setIsAppOpenAdVisible(adState === 'playing');
+      // Never display duplicate custom overlay when native AdMob activity is active
+      if (!admob.isNative()) {
+        setIsAppOpenAdVisible(adState === 'playing');
+      }
     });
 
     const handleVisibilityChange = () => {
@@ -405,7 +409,7 @@ export default function App() {
       setCompletedResult({ stars, moves, timeSeconds });
 
       if (isDailyActive) {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getLocalDateString();
         setProgress((prev) => {
           const next = {
             ...prev,
@@ -427,9 +431,10 @@ export default function App() {
         const newStars = Math.max(prevStars, stars);
         const starDiff = newStars - prevStars;
 
+        // Support progression across all 200 campaign levels and into infinite procedural levels
         const nextHighest = Math.max(
           prev.highestUnlockedLevel,
-          Math.min(TOTAL_LEVELS_COUNT, activeLevelId + 1)
+          activeLevelId + 1
         );
 
         const nextProgress: SavedProgress = {
@@ -459,7 +464,23 @@ export default function App() {
     [activeLevelId, addToast, isDailyActive]
   );
 
-  // Advance to next level
+  // Return to home
+  const handleReturnHome = useCallback(() => {
+    setIsPaused(false);
+    setIsGameOverOpen(false);
+    setCompletedResult(null);
+    setIsLevelSelectOpen(false);
+    setIsSettingsOpen(false);
+    setIsHowToPlayOpen(false);
+    setIsDailyOpen(false);
+    setIsDailyRewardsOpen(false);
+    setIsShopOpen(false);
+    setRewardedAdConfig(null);
+    setScreen('home');
+    document.body.dataset.state = 'title';
+  }, []);
+
+  // Advance to next level (seamlessly progresses into procedural infinite levels)
   const handleNextLevel = useCallback(() => {
     setCompletedResult(null);
     if (isDailyActive) {
@@ -467,12 +488,8 @@ export default function App() {
       return;
     }
     const nextId = activeLevelId + 1;
-    if (nextId <= TOTAL_LEVELS_COUNT) {
-      handleStartLevel(nextId);
-    } else {
-      handleReturnHome();
-    }
-  }, [activeLevelId, handleStartLevel, isDailyActive]);
+    handleStartLevel(nextId);
+  }, [activeLevelId, handleReturnHome, handleStartLevel, isDailyActive]);
 
   // Update settings
   const handleUpdateSettings = useCallback((partial: Partial<UserSettings>) => {
@@ -493,22 +510,6 @@ export default function App() {
     setIsSettingsOpen(false);
     addToast('Progress reset successfully', 'info');
   }, [addToast]);
-
-  // Return to home
-  const handleReturnHome = useCallback(() => {
-    setIsPaused(false);
-    setIsGameOverOpen(false);
-    setCompletedResult(null);
-    setIsLevelSelectOpen(false);
-    setIsSettingsOpen(false);
-    setIsHowToPlayOpen(false);
-    setIsDailyOpen(false);
-    setIsDailyRewardsOpen(false);
-    setIsShopOpen(false);
-    setRewardedAdConfig(null);
-    setScreen('home');
-    document.body.dataset.state = 'title';
-  }, []);
 
   // Buy Shop Items
   const handleBuyShopItem = useCallback(
@@ -586,7 +587,7 @@ export default function App() {
   // Claim Daily Streak Reward (+25 Coins)
   const handleClaimDailyReward = useCallback(
     (dayIndex: number, reward: { coins: number; hints: number; bombs: number; undos: number }) => {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getLocalDateString();
       const rewardCoins = ECONOMY_CONFIG.REWARDS.DAILY_LOGIN_COINS;
       setProgress((prev) => {
         const next: SavedProgress = {

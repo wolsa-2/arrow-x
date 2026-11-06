@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ECONOMY_CONFIG } from './economy';
 import { admob } from '../services/admobService';
+import { getLocalDateString } from '../utils/storage';
 
 test('ECONOMY_CONFIG adheres to exact specifications', () => {
   // A. Coin Rewards
@@ -226,4 +227,13 @@ test('AdMob failure handling provides user-friendly error and does not crash', a
 
   // Restore simulated network
   admob.setSimulateNetworkFailure(false);
+});
+
+test('REGRESSION: getLocalDateString returns consistent local calendar date YYYY-MM-DD', () => {
+  const d = new Date(2026, 9, 28); // Month is 0-indexed: 9 = October
+  const dateStr = getLocalDateString(d);
+  assert.equal(dateStr, '2026-10-28', 'Local date string must format correctly as YYYY-MM-DD');
+
+  const todayStr = getLocalDateString();
+  assert.match(todayStr, /^\d{4}-\d{2}-\d{2}$/, 'Today date string must match YYYY-MM-DD format');
 });
